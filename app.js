@@ -352,6 +352,7 @@ function showView(c, isSupervisor) {
 
 async function showShared(token) {
   $('accountBtn').hidden = true;
+  setSaveStatus('');
   let c = null;
   try { c = await store.getShared(token); } catch (e) { console.error(e); }
   if (!c) {
