@@ -70,7 +70,7 @@ async function doRoute() {
   const [kind, id] = location.hash.replace(/^#/, '').split('/');
   if (kind === 's') return showShared(id);
 
-  $('accountBtn').hidden = store.mode !== 'cloud';
+  $('accountBtn').hidden = store.mode !== 'cloud' || !store.user;
   if (store.mode === 'cloud' && !store.user) return showOnly('loginView', { back: false });
 
   if (kind === 'new') {

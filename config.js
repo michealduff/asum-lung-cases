@@ -2,6 +2,6 @@
 // The anon/publishable key is meant to be public; your data is protected by the
 // row-level security rules in supabase/setup.sql.
 window.ASUM_CONFIG = {
-  supabaseUrl: '',
-  supabaseAnonKey: '',
+  supabaseUrl: 'https://vnczyfkwkmywxfuqcexa.supabase.co',
+  supabaseAnonKey: 'sb_publishable_-WZLWcTOWaAZ8DbGHNQneQ__CWYkqgG',
 };
