@@ -8,9 +8,17 @@ A simple web app for writing up PoCUS lung ultrasound cases and sharing them wit
 - Upload scan videos from an iPhone
 - Report text you can copy or download, and a read-only "Supervisor view"
 
-## Current status (prototype)
+Live site: https://michealduff.github.io/asum-lung-cases/
 
-Everything is stored **in the browser on this device only**: cases in localStorage, videos in IndexedDB. Sharing with a supervisor by link needs online hosting and storage, which hasn't been chosen yet.
+## How it works
+
+- Static site hosted on GitHub Pages (pushing to `main` updates it).
+- Data lives in Supabase (Sydney): cases in the `cases` table, videos in the private `videos` bucket.
+  Setup SQL is in `supabase/setup.sql`; the connection details are in `config.js`.
+- Only the owner can sign in (public sign-ups are disabled in Supabase).
+- "Create share link" gives a case a secret token. The supervisor link `#s/<token>` shows that one case
+  read-only, with video links that last 90 days. "Stop sharing" turns the link off.
+- If `config.js` is blank the app runs in local-only mode (data stays in the browser).
 
 Do not enter patient identifiers. Check that clips don't show patient details on the machine screen.
 
