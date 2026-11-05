@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "asum-lung-cases", "runtimeExecutable": "node", "runtimeArgs": ["/Users/michael/Documents/Coding Projects/asum-lung-cases/serve.js", "8123"], "port": 8123 }
+  ]
+}

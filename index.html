@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>ASUM Lung Cases</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <button id="backBtn" class="ghost" hidden>‹ Cases</button>
+    <h1>ASUM Lung Cases</h1>
+    <div class="topbar-actions" id="topActions"></div>
+  </header>
+
+  <!-- Case list -->
+  <main id="listView" class="view">
+    <div class="list-head">
+      <button id="newCaseBtn" class="primary">+ New case</button>
+      <button id="exportAllBtn" class="ghost">Export all (JSON)</button>
+    </div>
+    <p class="hint">Cases are saved on this device only. Don't enter names, MRNs or other patient identifiers.</p>
+    <ul id="caseList" class="case-list"></ul>
+  </main>
+
+  <!-- Case editor -->
+  <main id="editView" class="view" hidden>
+    <div class="layout">
+      <section class="form">
+        <div class="card">
+          <h2 id="caseHeading">Case</h2>
+          <label>Case label <input id="f-title" placeholder="e.g. Breathless ? APO"></label>
+          <label>Date <input id="f-date" type="date"></label>
+        </div>
+
+        <div class="card">
+          <h2>Scan videos</h2>
+          <p class="hint">Before uploading, check that no patient name or MRN is visible on the machine screen in the clip.</p>
+          <label class="upload-btn">
+            <input id="videoInput" type="file" accept="video/*" multiple hidden>
+            <span class="primary-like">+ Add video</span>
+          </label>
+          <div id="videoList" class="video-list"></div>
+        </div>
+
+        <div class="card">
+          <h2>Indication</h2>
+          <textarea id="f-indication" rows="3" placeholder="One point per line, e.g.&#10;56 yo M with undifferentiated breathlessness&#10;BNP 1000, CXR bilateral haziness"></textarea>
+        </div>
+
+        <div class="card">
+          <h2>Zones</h2>
+          <div id="zoneMap" class="zone-map"></div>
+          <p class="legend"><span class="dot normal"></span>Normal <span class="dot abnormal"></span>Abnormal <span class="dot partial"></span>Partly filled <span class="dot empty"></span>Not filled</p>
+        </div>
+
+        <div id="zoneCards"></div>
+
+        <div class="card">
+          <h2>Summary</h2>
+          <h3>Interpretation / pattern</h3>
+          <div id="patternChips" class="chips"></div>
+          <div id="suggestion" class="suggestion" hidden></div>
+          <label>Other pattern <input id="f-patternOther" placeholder="Free text"></label>
+          <h3>Integration</h3>
+          <textarea id="f-integration" rows="4" placeholder="e.g. The combination of a BNP of 1000 and a bilateral gravity dependent interstitial syndrome with bilateral simple appearing pleural effusions favours pulmonary oedema"></textarea>
+        </div>
+
+        <div class="card danger-zone">
+          <button id="deleteBtn" class="danger">Delete case</button>
+        </div>
+      </section>
+
+      <aside class="preview">
+        <div class="card sticky">
+          <div class="preview-head">
+            <h2>Report</h2>
+            <div>
+              <button id="viewBtn" class="ghost">Supervisor view</button>
+              <button id="copyBtn" class="primary">Copy</button>
+              <button id="downloadBtn" class="ghost">.txt</button>
+            </div>
+          </div>
+          <pre id="reportText"></pre>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <!-- Read-only view for supervisor -->
+  <main id="viewView" class="view" hidden>
+    <div class="layout">
+      <section>
+        <div class="card">
+          <h2 id="viewHeading"></h2>
+          <p id="viewMeta" class="hint"></p>
+        </div>
+        <div id="viewVideos"></div>
+      </section>
+      <aside class="preview">
+        <div class="card sticky">
+          <h2>Report</h2>
+          <pre id="viewReport"></pre>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>
