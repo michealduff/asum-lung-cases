@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
   <title>ASUM Lung Cases</title>
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -11,16 +13,29 @@
   <header class="topbar">
     <button id="backBtn" class="ghost" hidden>‹ Cases</button>
     <h1>ASUM Lung Cases</h1>
-    <div class="topbar-actions" id="topActions"></div>
+    <span id="saveStatus" class="save-status"></span>
+    <button id="accountBtn" class="ghost" hidden>Account</button>
   </header>
 
+  <!-- Login (Supabase mode only) -->
+  <main id="loginView" class="view narrow" hidden>
+    <form id="loginForm" class="card">
+      <h2>Sign in</h2>
+      <label>Email <input id="loginEmail" type="email" autocomplete="username" required></label>
+      <label>Password <input id="loginPassword" type="password" autocomplete="current-password" required></label>
+      <button id="loginBtn" class="primary" type="submit">Sign in</button>
+      <p id="loginError" class="error"></p>
+    </form>
+  </main>
+
   <!-- Case list -->
-  <main id="listView" class="view">
+  <main id="listView" class="view" hidden>
     <div class="list-head">
       <button id="newCaseBtn" class="primary">+ New case</button>
       <button id="exportAllBtn" class="ghost">Export all (JSON)</button>
     </div>
-    <p class="hint">Cases are saved on this device only. Don't enter names, MRNs or other patient identifiers.</p>
+    <p class="hint">Don't enter names, MRNs or other patient identifiers.</p>
+    <p id="localNote" class="hint" hidden>Local mode: cases are saved in this browser only.</p>
     <ul id="caseList" class="case-list"></ul>
   </main>
 
@@ -35,12 +50,18 @@
         </div>
 
         <div class="card">
+          <h2>Share with supervisor</h2>
+          <div id="shareBox"></div>
+        </div>
+
+        <div class="card">
           <h2>Scan videos</h2>
           <p class="hint">Before uploading, check that no patient name or MRN is visible on the machine screen in the clip.</p>
           <label class="upload-btn">
-            <input id="videoInput" type="file" accept="video/*" multiple hidden>
+            <input id="videoInput" type="file" accept="video/*" multiple>
             <span class="primary-like">+ Add video</span>
           </label>
+          <span id="uploadStatus" class="hint"></span>
           <div id="videoList" class="video-list"></div>
         </div>
 
@@ -88,8 +109,9 @@
     </div>
   </main>
 
-  <!-- Read-only view for supervisor -->
+  <!-- Read-only case (supervisor link, or preview of it) -->
   <main id="viewView" class="view" hidden>
+    <p id="viewNote" class="hint">Preview of what your supervisor sees.</p>
     <div class="layout">
       <section>
         <div class="card">
@@ -108,6 +130,10 @@
   </main>
 
   <div id="toast" class="toast" hidden></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+  <script src="config.js"></script>
+  <script src="template.js"></script>
+  <script src="store.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
