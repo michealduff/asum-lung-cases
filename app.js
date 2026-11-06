@@ -166,6 +166,7 @@ function showList() {
   current = null;
   showOnly('listView', { back: false });
   $('localNote').hidden = store.mode !== 'local';
+  renderStorageMeter();
   const list = $('caseList');
   list.innerHTML = '';
   const sorted = [...cases].sort((a, b) => b.number - a.number);
@@ -187,6 +188,20 @@ function showList() {
         (c.feedback || []).length ? el('div', { class: `fb-tag${unseenFeedback(c) ? ' new' : ''}` },
           unseenFeedback(c) ? `💬 ${unseenFeedback(c)} new` : `💬 ${c.feedback.length}`) : '')));
   });
+}
+
+const STORAGE_LIMIT = 1024 * 1048576; // Supabase free plan
+function renderStorageMeter() {
+  const box = $('storageMeter');
+  if (store.mode !== 'cloud') { box.hidden = true; return; }
+  const used = cases.reduce((sum, c) => sum + (c.videos || []).reduce((a, v) => a + (v.size || 0), 0), 0);
+  const frac = Math.min(1, used / STORAGE_LIMIT);
+  box.hidden = false;
+  box.className = `storage${frac > 0.8 ? ' warn' : ''}`;
+  box.replaceChildren(
+    el('div', { class: 'storage-text' }, `Video storage: ${used < 1048576 * 1024 ? `${Math.round(used / 1048576)} MB` : `${(used / 1073741824).toFixed(2)} GB`} of 1 GB used`,
+      frac > 0.8 ? ' — getting full; delete old clips or upgrade Supabase' : ''),
+    el('div', { class: 'storage-bar' }, el('div', { style: `width:${Math.max(1, Math.round(frac * 100))}%` })));
 }
 
 // ---------- Editor ----------
@@ -274,25 +289,59 @@ async function renderVideos() {
   }
 }
 
+function setProgress(label, frac) {
+  const box = $('uploadProgress');
+  box.hidden = frac == null;
+  if (frac == null) return;
+  box.querySelector('.bar').style.width = `${Math.round(frac * 100)}%`;
+  box.querySelector('span').textContent = `${label} ${Math.round(frac * 100)}%`;
+}
+
+let uploading = false;
 $('videoInput').addEventListener('change', async (e) => {
   const files = [...e.target.files];
   e.target.value = '';
+  if (!files.length || uploading) return;
+  uploading = true;
+  const caseRef = current;
+  const lock = await keepAwake();
   const status = $('uploadStatus');
+  status.textContent = 'Keep this screen open until the upload finishes.';
   for (const [i, f] of files.entries()) {
-    if (store.mode === 'cloud' && f.size > 50 * 1048576) {
-      toast(`${f.name} is ${mb(f.size)} — the limit is 50 MB. Trim the clip or record at 1080p.`, 5000);
+    const of = files.length > 1 ? ` (${i + 1} of ${files.length})` : '';
+    let toUpload = f;
+    try {
+      setProgress(`Shrinking clip${of}…`, 0);
+      toUpload = await shrinkVideo(f, (p) => setProgress(`Shrinking clip${of}…`, p));
+    } catch (err) {
+      console.error(err);
+      if (f.size > MAX_UPLOAD_BYTES) {
+        setProgress(null);
+        toast(`Couldn't shrink ${f.name} on this device, and it's ${mb(f.size)} (limit 50 MB). Try trimming it in Photos.`, 7000);
+        continue;
+      }
+      toast('Couldn’t shrink this clip — uploading the original instead', 4000);
+    }
+    if (toUpload.size > MAX_UPLOAD_BYTES) {
+      setProgress(null);
+      toast(`${f.name} is still ${mb(toUpload.size)} after shrinking (limit 50 MB). Try trimming it in Photos.`, 7000);
       continue;
     }
-    status.textContent = `Uploading ${files.length > 1 ? `${i + 1} of ${files.length} ` : ''}(${mb(f.size)})…`;
     try {
-      const meta = await store.addVideo(current, f);
-      current.videos.push(meta);
-      touch();
-    } catch (err) { toast(`Could not upload ${f.name}: ${err.message || err}`, 5000); }
+      setProgress(`Uploading${of}…`, 0);
+      const meta = await store.addVideo(caseRef, toUpload, (p) => setProgress(`Uploading${of}…`, p));
+      meta.name = f.name;
+      meta.originalSize = f.size;
+      caseRef.videos.push(meta);
+      if (current === caseRef) touch(); else store.save(caseRef);
+    } catch (err) { toast(`Could not upload ${f.name}: ${err.message || err}`, 6000); }
   }
+  setProgress(null);
   status.textContent = '';
-  try { await store.refreshShare(current); } catch (err) { console.error(err); }
-  renderVideos();
+  try { await store.refreshShare(caseRef); } catch (err) { console.error(err); }
+  if (lock) lock.release().catch(() => {});
+  uploading = false;
+  if (current === caseRef) renderVideos();
 });
 
 function chipGroup(field, getVal, setVal) {

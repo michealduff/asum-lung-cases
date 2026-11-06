@@ -80,9 +80,10 @@ class LocalStore {
     this._persist();
     await Promise.all((c.videos || []).map((v) => this._idb('readwrite', (s) => s.delete(v.id)).catch(() => {})));
   }
-  async addVideo(c, file) {
+  async addVideo(c, file, onProgress) {
     const id = `${c.id}:${Date.now()}:${Math.random().toString(36).slice(2, 7)}`;
     await this._idb('readwrite', (s) => s.put(file, id));
+    if (onProgress) onProgress(1);
     return { id, name: file.name, size: file.size, type: file.type, label: '' };
   }
   async removeVideo(c, meta) { await this._idb('readwrite', (s) => s.delete(meta.id)); }
@@ -193,13 +194,37 @@ class CloudStore {
     const { error } = await this.sb.from('cases').delete().eq('id', c.id);
     if (error) throw error;
   }
-  async addVideo(c, file) {
+  async addVideo(c, file, onProgress) {
     const ext = (file.name.split('.').pop() || 'mov').toLowerCase().replace(/[^a-z0-9]/g, '');
     const path = `${this.user.id}/${c.id}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
-    const { error } = await this.sb.storage.from('videos').upload(path, file, { contentType: file.type || 'video/quicktime' });
-    if (error) throw error;
+    await this._uploadWithProgress(path, file, onProgress);
     const meta = { id: path, name: file.name, size: file.size, type: file.type, label: '' };
     return meta;
+  }
+  // Same as storage.upload(), but via XMLHttpRequest so upload progress can be shown.
+  async _uploadWithProgress(path, file, onProgress) {
+    const { data } = await this.sb.auth.getSession();
+    const token = data.session && data.session.access_token;
+    if (!token) throw new Error('Please sign in again');
+    const url = `${this.cfg.supabaseUrl}/storage/v1/object/videos/${path.split('/').map(encodeURIComponent).join('/')}`;
+    await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url);
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      xhr.setRequestHeader('apikey', this.cfg.supabaseAnonKey);
+      xhr.setRequestHeader('Content-Type', file.type || 'video/mp4');
+      xhr.setRequestHeader('x-upsert', 'false');
+      xhr.setRequestHeader('cache-control', '3600');
+      xhr.upload.onprogress = (e) => { if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total); };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) return resolve();
+        let msg = `upload failed (${xhr.status})`;
+        try { msg = JSON.parse(xhr.responseText).message || msg; } catch { /* keep default */ }
+        reject(new Error(msg));
+      };
+      xhr.onerror = () => reject(new Error('network error — check your connection'));
+      xhr.send(file);
+    });
   }
   async removeVideo(c, meta) {
     const { error } = await this.sb.storage.from('videos').remove([meta.id]);

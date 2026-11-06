@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex, nofollow">
   <meta name="referrer" content="no-referrer">
   <title>ASUM Lung Cases</title>
-  <link rel="stylesheet" href="styles.css?v=20261106142020">
+  <link rel="stylesheet" href="styles.css?v=20261106144551">
 </head>
 <body>
   <header class="topbar">
@@ -36,6 +36,7 @@
       <button id="exportAllBtn" class="ghost">Backup (JSON)</button>
     </div>
     <p class="hint">Don't enter names, MRNs or other patient identifiers.</p>
+    <div id="storageMeter" class="storage" hidden></div>
     <p id="localNote" class="hint" hidden>Local mode: cases are saved in this browser only.</p>
     <ul id="caseList" class="case-list"></ul>
   </main>
@@ -62,12 +63,13 @@
 
         <div class="card">
           <h2>Scan videos</h2>
-          <p class="hint">Before uploading, check that no patient name or MRN is visible on the machine screen in the clip.</p>
+          <p class="hint">Clips are shrunk on your phone before uploading (long clips are fine). Check that no patient name or MRN is visible on the machine screen.</p>
           <label class="upload-btn">
             <input id="videoInput" type="file" accept="video/*" multiple>
             <span class="primary-like">+ Add video</span>
           </label>
           <span id="uploadStatus" class="hint"></span>
+          <div id="uploadProgress" class="progress" hidden><div class="bar"></div><span></span></div>
           <div id="videoList" class="video-list"></div>
         </div>
 
@@ -124,10 +126,11 @@
 
   <div id="toast" class="toast" hidden></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
-  <script src="config.js?v=20261106142020"></script>
-  <script src="template.js?v=20261106142020"></script>
-  <script src="store.js?v=20261106142020"></script>
-  <script src="word.js?v=20261106142020"></script>
-  <script src="app.js?v=20261106142020"></script>
+  <script src="config.js?v=20261106144551"></script>
+  <script src="template.js?v=20261106144551"></script>
+  <script src="store.js?v=20261106144551"></script>
+  <script src="compress.js?v=20261106144551"></script>
+  <script src="word.js?v=20261106144551"></script>
+  <script src="app.js?v=20261106144551"></script>
 </body>
 </html>
