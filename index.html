@@ -32,7 +32,8 @@
   <main id="listView" class="view" hidden>
     <div class="list-head">
       <button id="newCaseBtn" class="primary">+ New case</button>
-      <button id="exportAllBtn" class="ghost">Export all (JSON)</button>
+      <button id="wordAllBtn" class="ghost">Export all (Word)</button>
+      <button id="exportAllBtn" class="ghost">Backup (JSON)</button>
     </div>
     <p class="hint">Don't enter names, MRNs or other patient identifiers.</p>
     <p id="localNote" class="hint" hidden>Local mode: cases are saved in this browser only.</p>
@@ -100,6 +101,7 @@
             <div>
               <button id="viewBtn" class="ghost">Supervisor view</button>
               <button id="copyBtn" class="primary">Copy</button>
+              <button id="wordBtn" class="ghost">Word</button>
               <button id="downloadBtn" class="ghost">.txt</button>
             </div>
           </div>
@@ -134,6 +136,7 @@
   <script src="config.js"></script>
   <script src="template.js"></script>
   <script src="store.js"></script>
+  <script src="word.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

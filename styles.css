@@ -62,7 +62,8 @@ textarea { resize: vertical; }
 .sticky { position: sticky; top: 72px; }
 .preview-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .preview-head h2 { margin: 0; }
-.preview-head div { display: flex; gap: 6px; }
+.preview-head { flex-wrap: wrap; }
+.preview-head div { display: flex; flex-wrap: wrap; gap: 6px; }
 .preview pre { white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, Menlo, monospace; font-size: 13px; line-height: 1.5; tab-size: 3; margin: 12px 0 0; max-height: calc(100vh - 160px); overflow: auto; }
 
 /* Zone map */

@@ -381,11 +381,23 @@ $('deleteBtn').addEventListener('click', async () => {
   } catch (e) { toast(e.message || 'Could not delete'); }
 });
 $('copyBtn').addEventListener('click', async () => { toast(await copyText(buildReport(current)) ? 'Report copied' : 'Copy failed'); });
-function download(name, text, type) {
-  const a = el('a', { href: URL.createObjectURL(new Blob([text], { type })), download: name });
+function download(name, data, type) {
+  const url = URL.createObjectURL(data instanceof Blob ? data : new Blob([data], { type }));
+  const a = el('a', { href: url, download: name });
   document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+async function exportWord(btn, list, name) {
+  if (!list.length) return toast('No cases to export');
+  const old = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Preparing…';
+  try { download(name, await buildWordBlob(list)); }
+  catch (e) { console.error(e); toast(e.message || 'Could not create Word file'); }
+  finally { btn.disabled = false; btn.textContent = old; }
 }
 $('downloadBtn').addEventListener('click', () => download(`lung-us-case-${current.number}.txt`, buildReport(current), 'text/plain'));
+$('wordBtn').addEventListener('click', (e) => exportWord(e.currentTarget, [current], `Lung US case ${current.number}.docx`));
+$('wordAllBtn').addEventListener('click', (e) => exportWord(e.currentTarget, cases, `Lung US cases ${new Date().toISOString().slice(0, 10)}.docx`));
 $('exportAllBtn').addEventListener('click', () => {
   download(`asum-lung-cases-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(cases, null, 2), 'application/json');
 });
