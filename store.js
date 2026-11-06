@@ -94,6 +94,7 @@ class LocalStore {
 class CloudStore {
   constructor(cfg, onStatus) {
     this.mode = 'cloud';
+    this.cfg = cfg;
     this.sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
     this.save = makeDebouncedSaver((c) => this._saveNow(c), onStatus);
     this.cases = [];
@@ -203,15 +204,32 @@ class CloudStore {
     const urls = Object.fromEntries((r.shared_videos || []).map((v) => [v.id, v.url]));
     const c = { ...blankCase(r.number), ...r.data, number: r.number };
     c.videos = (c.videos || []).map((v) => ({ ...v, sharedUrl: urls[v.id] || '' }));
-    const fb = await this.sb.rpc('get_shared_feedback', { token });
+    // A separate, never-signed-in client that sends the share code with each request;
+    // the database rules then allow access to this one case's feedback only.
+    const sc = this._shareClient(token);
+    const idRes = await sc.from('cases').select('id').eq('share_token', token).maybeSingle();
+    const fb = await sc.from('feedback').select('id, author, body, created_at').order('created_at');
+    c._caseId = idRes.data && idRes.data.id;
     c.feedback = fb.data || [];
-    c.feedbackEnabled = !fb.error;
+    c.feedbackEnabled = !!c._caseId && !fb.error;
     return c;
   }
-  async addFeedback(token, author, body) {
-    const { data, error } = await this.sb.rpc('add_shared_feedback', { p_token: token, p_author: author, p_body: body });
-    if (error) throw new Error(error.message);
-    return data[0];
+  _shareClient(token) {
+    if (!this._sc || this._scToken !== token) {
+      this._sc = window.supabase.createClient(this.cfg.supabaseUrl, this.cfg.supabaseAnonKey, {
+        global: { headers: { 'x-share-token': token } },
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'asum-share' },
+      });
+      this._scToken = token;
+    }
+    return this._sc;
+  }
+  async addFeedback(token, caseId, author, body) {
+    const { data, error } = await this._shareClient(token).from('feedback')
+      .insert({ case_id: caseId, author: author || null, body })
+      .select('id, author, body, created_at').single();
+    if (error) throw new Error(error.code === '42501' ? 'Could not send — this link may have been turned off' : error.message);
+    return data;
   }
 }
 

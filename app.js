@@ -434,7 +434,7 @@ function supervisorFeedbackSection(c) {
     if (!body) { text.focus(); return; }
     btn.disabled = true; btn.textContent = 'Sending…';
     try {
-      const f = await store.addFeedback(c._token, name.value.trim(), body);
+      const f = await store.addFeedback(c._token, c._caseId, name.value.trim().slice(0, 100), body.slice(0, 5000));
       try { localStorage.setItem('asumFeedbackName', name.value.trim()); } catch { /* ignore */ }
       c.feedback = [...(c.feedback || []), f];
       listHost.replaceChildren(feedbackList(c.feedback));
