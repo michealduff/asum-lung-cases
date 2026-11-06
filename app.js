@@ -58,6 +58,7 @@ async function videoEl(meta) {
 //  #s/<token>   supervisor link (no login)
 const VIEWS = ['loginView', 'listView', 'editView', 'viewView'];
 function showOnly(viewId, { back = true } = {}) {
+  resetDock();
   VIEWS.forEach((v) => { $(v).hidden = v !== viewId; });
   $('backBtn').hidden = !back;
   revokeUrls();
@@ -336,6 +337,64 @@ function refreshDerived() {
 });
 
 // ---------- Read-only views ----------
+// ---------- Mini player ----------
+// While a clip is playing and its place on the page has scrolled out of view, the clip is
+// pinned to the top of the screen so the zone descriptions can be read while it plays.
+// (CSS position:fixed on the same <video>, so playback never restarts.)
+let docked = null;
+let clipObservers = [];
+const topbarH = () => document.querySelector('.topbar').offsetHeight;
+
+function dock(fig) {
+  if (docked === fig) return;
+  undock();
+  fig.style.minHeight = `${fig.offsetHeight}px`; // keep its space in the page
+  fig.style.setProperty('--dock-top', `${topbarH() + 6}px`);
+  fig.classList.add('docked');
+  docked = fig;
+  requestAnimationFrame(() => {
+    document.documentElement.style.setProperty('--dock-h', `${fig.querySelector('.vwrap').offsetHeight + 12}px`);
+  });
+}
+function undock() {
+  if (!docked) return;
+  docked.classList.remove('docked');
+  docked.style.minHeight = '';
+  docked = null;
+  document.documentElement.style.removeProperty('--dock-h');
+}
+function resetDock() {
+  undock();
+  clipObservers.forEach((o) => o.disconnect());
+  clipObservers = [];
+}
+// Pin only once the clip has scrolled up past the top of the screen (reading below it).
+// Scrolling back up above it returns it to its normal place.
+const scrolledPast = (fig) => {
+  const r = fig.getBoundingClientRect();
+  return r.top + r.height * 0.5 < topbarH();
+};
+function watchClip(fig, video) {
+  video.addEventListener('play', () => {
+    document.querySelectorAll('.rp-video video').forEach((v) => { if (v !== video) v.pause(); });
+    if (scrolledPast(fig)) dock(fig);
+  });
+  const io = new IntersectionObserver(() => {
+    if (docked === fig && !scrolledPast(fig)) undock();
+    else if (docked !== fig && !video.paused && scrolledPast(fig)) dock(fig);
+  }, { threshold: [0, 0.25, 0.5, 0.75, 1] });
+  io.observe(fig);
+  clipObservers.push(io);
+}
+// "▶ clip" on a zone: play that clip in the mini player without leaving the zone.
+function playClipHere(zone) {
+  const fig = $(`clip-${zone}`);
+  const video = fig && fig.querySelector('video');
+  if (!video) return;
+  if (scrolledPast(fig)) dock(fig);
+  video.play().catch(() => {});
+}
+
 // Findings that are the normal default; anything else is highlighted on the supervisor page.
 const NORMAL_LINES = new Set(['Pleural line: thin, smooth, sliding present', 'Subpleural: no consolidation',
   'A-lines', 'No effusion', 'Curtain sign present', 'Spine sign']);
@@ -383,9 +442,16 @@ function showView(c, isSupervisor) {
   if (videos.length) {
     const vs = section('Scan clips');
     videos.forEach(async (meta) => {
-      const fig = el('figure', { class: 'rp-video', id: `clip-${zoneKey(meta.label)}` }, el('figcaption', {}, meta.label || meta.name));
+      const label = meta.label || meta.name;
+      const wrap = el('div', { class: 'vwrap' },
+        el('span', { class: 'dock-label' }, label),
+        el('button', { type: 'button', class: 'dock-close', 'aria-label': 'Close mini player', onclick: () => { wrap.querySelector('video').pause(); undock(); } }, '×'));
+      const fig = el('figure', { class: 'rp-video', id: `clip-${zoneKey(meta.label)}` }, wrap, el('figcaption', {}, label));
       vs.append(fig);
-      fig.prepend(await videoEl(meta));
+      const video = await videoEl(meta);
+      video.loop = true;
+      wrap.prepend(video);
+      watchClip(fig, video);
     });
     body.append(vs);
   }
@@ -404,7 +470,7 @@ function showView(c, isSupervisor) {
     const st = zoneStatus(z, d);
     const lines = st === 'empty' ? [] : zoneLines(z, d);
     const clip = videoZones.has(z) ? el('button', { type: 'button', class: 'clip-link',
-      onclick: () => $(`clip-${z}`).scrollIntoView({ behavior: 'smooth', block: 'center' }) }, '▶ clip') : '';
+      onclick: () => playClipHere(z) }, '▶ clip') : '';
     findings.append(el('div', { class: `rp-zone z-${st}`, id: `vz-${z}` },
       el('div', { class: 'rp-zone-head' },
         el('span', { class: 'rp-zone-name' }, z),
