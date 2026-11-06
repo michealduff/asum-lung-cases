@@ -191,17 +191,51 @@ function showList() {
 }
 
 const STORAGE_LIMIT = 1024 * 1048576; // Supabase free plan
+const STORAGE_HEADROOM = 60 * 1048576; // keep a margin below the plan limit
+const mediaOf = (c) => [...(c.videos || []), ...((c.imaging && c.imaging.images) || [])];
+const storageUsed = () => cases.reduce((sum, c) => sum + mediaOf(c).reduce((a, v) => a + (v.size || 0), 0), 0);
+const uploadedAt = (v) => Number(String(v.id).split('/').pop().split('-')[0]) || 0;
+
+// If a new upload won't fit, delete the oldest clips (from other cases) until it does.
+// The cases keep a note of which clip was removed. Images are never removed.
+async function freeSpaceFor(bytes, keepCase) {
+  if (store.mode !== 'cloud') return [];
+  const budget = (window.__storageLimitForTest || STORAGE_LIMIT) - STORAGE_HEADROOM;
+  let used = storageUsed();
+  if (used + bytes <= budget) return [];
+  const candidates = cases.filter((c) => c.id !== keepCase.id)
+    .flatMap((c) => (c.videos || []).map((v) => ({ c, v })))
+    .sort((a, b) => uploadedAt(a.v) - uploadedAt(b.v));
+  const removed = [];
+  for (const { c, v } of candidates) {
+    if (used + bytes <= budget) break;
+    await store.removeVideo(c, v);
+    c.videos = c.videos.filter((x) => x.id !== v.id);
+    c.removedVideos = [...(c.removedVideos || []), { label: v.label || '', name: v.name, removedAt: Date.now() }];
+    used -= v.size || 0;
+    removed.push({ c, v });
+  }
+  for (const c of new Set(removed.map((r) => r.c))) {
+    try { if (c.shareToken) await store.refreshShare(c); else store.save(c); } catch (e) { console.error(e); }
+  }
+  if (removed.length) {
+    const list = removed.map(({ c, v }) => `#${c.number} ${v.label || v.name}`).join(', ');
+    toast(`Storage full — removed ${removed.length} oldest clip${removed.length > 1 ? 's' : ''} to make room (${list})`, 8000);
+  }
+  if (used + bytes > budget) throw new Error('Not enough storage left, even after removing old clips');
+  return removed;
+}
+
 function renderStorageMeter() {
   const box = $('storageMeter');
   if (store.mode !== 'cloud') { box.hidden = true; return; }
-  const used = cases.reduce((sum, c) => sum + [...(c.videos || []), ...((c.imaging && c.imaging.images) || [])]
-    .reduce((a, v) => a + (v.size || 0), 0), 0);
+  const used = storageUsed();
   const frac = Math.min(1, used / STORAGE_LIMIT);
   box.hidden = false;
   box.className = `storage${frac > 0.8 ? ' warn' : ''}`;
   box.replaceChildren(
     el('div', { class: 'storage-text' }, `Storage: ${used < 1048576 * 1024 ? `${Math.round(used / 1048576)} MB` : `${(used / 1073741824).toFixed(2)} GB`} of 1 GB used`,
-      frac > 0.8 ? ' — getting full; delete old clips or upgrade Supabase' : ''),
+      frac > 0.8 ? ' — nearly full; the oldest clips will be removed automatically to make room' : ''),
     el('div', { class: 'storage-bar' }, el('div', { style: `width:${Math.max(1, Math.round(frac * 100))}%` })));
 }
 
@@ -270,9 +304,13 @@ async function doShare() {
   } catch (e) { toast(e.message || 'Could not create link'); }
 }
 
+const removedNote = (c) => ((c.removedVideos || []).length
+  ? el('p', { class: 'hint removed-note' }, `🗑 Removed to free up storage: ${c.removedVideos.map((r) => r.label || r.name).join(', ')}`) : '');
+
 async function renderVideos() {
   const host = $('videoList');
   host.innerHTML = '';
+  if ((current.removedVideos || []).length) host.append(removedNote(current));
   for (const meta of current.videos) {
     const label = el('input', { placeholder: 'Label, e.g. R4 or R-PLAPS' });
     label.value = meta.label || '';
@@ -333,6 +371,7 @@ $('videoInput').addEventListener('change', async (e) => {
       continue;
     }
     try {
+      await freeSpaceFor(toUpload.size, caseRef);
       setProgress(`Uploading${of}…`, 0);
       const meta = await store.addVideo(caseRef, toUpload, (p) => setProgress(`Uploading${of}…`, p));
       meta.name = f.name;
@@ -401,6 +440,7 @@ $('imageInput').addEventListener('change', async (e) => {
       if (f.size > 15 * 1048576) { toast(`Couldn't process ${f.name}`, 5000); continue; }
     }
     try {
+      await freeSpaceFor(up.size, caseRef);
       setImageProgress(`Uploading image${of}…`, 0);
       const meta = await store.addVideo(caseRef, up, (p) => setImageProgress(`Uploading image${of}…`, p));
       Object.assign(meta, { name: f.name, caption: '', width, height });
@@ -666,8 +706,8 @@ function showView(c, isSupervisor) {
       : el('p', { class: 'rp-empty' }, 'Not yet recorded')));
 
   // Videos
-  if (videos.length) {
-    const vs = section('Scan clips');
+  if (videos.length || (c.removedVideos || []).length) {
+    const vs = section('Scan clips', removedNote(c));
     videos.forEach(async (meta) => {
       const label = meta.label || meta.name;
       const wrap = el('div', { class: 'vwrap' },

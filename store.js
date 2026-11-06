@@ -3,7 +3,7 @@
 //   LocalStore - browser only (localStorage + IndexedDB), used when config.js is blank
 //   CloudStore - Supabase (database + private video bucket + secret share links)
 
-const CASE_FIELDS = ['title', 'date', 'indication', 'patterns', 'patternOther', 'integration', 'zones', 'videos', 'imaging', 'createdAt', 'updatedAt', 'feedbackSeenAt'];
+const CASE_FIELDS = ['title', 'date', 'indication', 'patterns', 'patternOther', 'integration', 'zones', 'videos', 'removedVideos', 'imaging', 'createdAt', 'updatedAt', 'feedbackSeenAt'];
 const SHARE_DAYS = 90; // how long supervisor video links last before Share needs tapping again
 
 function blankCase(number) {
