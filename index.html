@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex, nofollow">
   <meta name="referrer" content="no-referrer">
   <title>ASUM Lung Cases</title>
-  <link rel="stylesheet" href="styles.css?v=20261106150407">
+  <link rel="stylesheet" href="styles.css?v=20261106151550">
 </head>
 <body>
   <header class="topbar">
@@ -32,10 +32,14 @@
   <main id="listView" class="view" hidden>
     <div class="list-head">
       <button id="newCaseBtn" class="primary">+ New case</button>
+      <button id="logbookBtn" class="ghost">Export ASUM logbook (Excel)</button>
       <button id="wordAllBtn" class="ghost">Export all (Word)</button>
       <button id="exportAllBtn" class="ghost">Backup (JSON)</button>
     </div>
     <p class="hint">Don't enter names, MRNs or other patient identifiers.</p>
+    <div class="template-row"><span id="templateNote" class="hint"></span>
+      <button id="changeTemplateBtn" class="linkish" hidden>Change template</button>
+      <input id="templateInput" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden></div>
     <div id="storageMeter" class="storage" hidden></div>
     <p id="localNote" class="hint" hidden>Local mode: cases are saved in this browser only.</p>
     <ul id="caseList" class="case-list"></ul>
@@ -138,11 +142,12 @@
 
   <div id="toast" class="toast" hidden></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
-  <script src="config.js?v=20261106150407"></script>
-  <script src="template.js?v=20261106150407"></script>
-  <script src="store.js?v=20261106150407"></script>
-  <script src="compress.js?v=20261106150407"></script>
-  <script src="word.js?v=20261106150407"></script>
-  <script src="app.js?v=20261106150407"></script>
+  <script src="config.js?v=20261106151550"></script>
+  <script src="template.js?v=20261106151550"></script>
+  <script src="store.js?v=20261106151550"></script>
+  <script src="compress.js?v=20261106151550"></script>
+  <script src="excel.js?v=20261106151550"></script>
+  <script src="word.js?v=20261106151550"></script>
+  <script src="app.js?v=20261106151550"></script>
 </body>
 </html>

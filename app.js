@@ -167,6 +167,7 @@ function showList() {
   showOnly('listView', { back: false });
   $('localNote').hidden = store.mode !== 'local';
   renderStorageMeter();
+  renderTemplateNote();
   const list = $('caseList');
   list.innerHTML = '';
   const sorted = [...cases].sort((a, b) => b.number - a.number);
@@ -614,11 +615,24 @@ function playClipHere(zone) {
 // ---------- Feedback ----------
 const fbTime = (t) => new Date(t).toLocaleString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 const unseenFeedback = (c) => (c.feedback || []).filter((f) => !c.feedbackSeenAt || new Date(f.created_at).getTime() > c.feedbackSeenAt).length;
+const yesNo = (v) => (v == null ? null : v ? 'Yes' : 'No');
 function feedbackList(items) {
   if (!items.length) return el('p', { class: 'rp-empty' }, 'No feedback yet.');
   return el('div', { class: 'fb-list' }, [...items].reverse().map((f) => el('div', { class: 'fb-item' },
     el('div', { class: 'fb-meta' }, el('strong', {}, f.author || 'Supervisor'), ` · ${fbTime(f.created_at)}`),
+    (f.adequate_images != null || f.correct_interpretation != null) ? el('div', { class: 'fb-ticks' },
+      f.adequate_images != null ? el('span', { class: `tick ${f.adequate_images ? 'yes' : 'no'}` }, `Adequate images: ${yesNo(f.adequate_images)}`) : '',
+      f.correct_interpretation != null ? el('span', { class: `tick ${f.correct_interpretation ? 'yes' : 'no'}` }, `Correct interpretation: ${yesNo(f.correct_interpretation)}`) : '') : '',
     el('div', { class: 'fb-body' }, f.body))));
+}
+function yesNoQuestion(label) {
+  let value = null;
+  const btns = ['Yes', 'No'].map((t) => el('button', { type: 'button', class: 'chip', onclick: () => {
+    value = value === (t === 'Yes') ? null : t === 'Yes';
+    btns.forEach((b) => b.classList.toggle('on', value != null && (b.textContent === 'Yes') === value));
+  } }, t));
+  const node = el('div', { class: 'fb-q' }, el('span', {}, label), el('div', { class: 'chips' }, btns));
+  return { node, get: () => value, reset: () => { value = null; btns.forEach((b) => b.classList.remove('on')); } };
 }
 function renderOwnerFeedback() {
   const items = current.feedback || [];
@@ -641,22 +655,26 @@ function supervisorFeedbackSection(c) {
   try { saved = localStorage.getItem('asumFeedbackName') || ''; } catch { /* ignore */ }
   const name = el('input', { placeholder: 'Your name (optional)', autocomplete: 'name' });
   name.value = saved;
-  const text = el('textarea', { rows: '5', placeholder: 'Write feedback on this scan…' });
+  const qImages = yesNoQuestion('Adequate images?');
+  const qInterp = yesNoQuestion('Correct interpretation?');
+  const text = el('textarea', { rows: '5', placeholder: 'Write feedback on this scan… (please elaborate if either answer is No)' });
   const btn = el('button', { type: 'button', class: 'primary fb-send', onclick: async () => {
     const body = text.value.trim();
     if (!body) { text.focus(); return; }
     btn.disabled = true; btn.textContent = 'Sending…';
     try {
-      const f = await store.addFeedback(c._token, c._caseId, name.value.trim().slice(0, 100), body.slice(0, 5000));
+      const f = await store.addFeedback(c._token, c._caseId, name.value.trim().slice(0, 100), body.slice(0, 5000),
+        { adequate_images: qImages.get(), correct_interpretation: qInterp.get() });
       try { localStorage.setItem('asumFeedbackName', name.value.trim()); } catch { /* ignore */ }
       c.feedback = [...(c.feedback || []), f];
       listHost.replaceChildren(feedbackList(c.feedback));
       text.value = '';
+      qImages.reset(); qInterp.reset();
       toast('Feedback sent — thank you');
     } catch (e) { toast(e.message || 'Could not send feedback', 4000); }
     finally { btn.disabled = false; btn.textContent = 'Send feedback'; }
   } }, 'Send feedback');
-  sec.append(el('div', { class: 'fb-form' }, el('div', { class: 'rp-label' }, 'Add feedback'), name, text, btn));
+  sec.append(el('div', { class: 'fb-form' }, el('div', { class: 'rp-label' }, 'Add feedback'), name, qImages.node, qInterp.node, text, btn));
   return sec;
 }
 
@@ -816,6 +834,43 @@ async function exportWord(btn, list, name) {
 $('downloadBtn').addEventListener('click', () => download(`lung-us-case-${current.number}.txt`, buildReport(current), 'text/plain'));
 $('wordBtn').addEventListener('click', (e) => exportWord(e.currentTarget, [current], `Lung US case ${current.number}.docx`));
 $('wordAllBtn').addEventListener('click', (e) => exportWord(e.currentTarget, cases, `Lung US cases ${new Date().toISOString().slice(0, 10)}.docx`));
+async function exportLogbook(templateEntry) {
+  const btn = $('logbookBtn');
+  const old = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Preparing…';
+  try {
+    if (store.mode === 'cloud') { try { cases = await store.list(); } catch { /* use what we have */ } }
+    const blob = await buildLogbook(templateEntry.blob, cases);
+    download(`ASUM CCPU Lung Logbook – ${new Date().toISOString().slice(0, 10)}.xlsx`, blob);
+    toast(`Logbook filled with ${cases.length} case${cases.length === 1 ? '' : 's'}`);
+  } catch (e) { console.error(e); toast(e.message || 'Could not create the logbook', 6000); }
+  finally { btn.disabled = false; btn.textContent = old; }
+}
+$('logbookBtn').addEventListener('click', async () => {
+  if (!cases.length) return toast('No cases to export');
+  const t = await getLogbookTemplate();
+  if (t && t.blob) return exportLogbook(t);
+  toast('Choose the blank ASUM logbook template (.xlsx). It’s remembered on this device.', 5000);
+  $('templateInput').click();
+});
+$('changeTemplateBtn').addEventListener('click', () => $('templateInput').click());
+$('templateInput').addEventListener('change', async (e) => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  try {
+    await buildLogbook(f, []); // check it's the right kind of file before saving it
+    await saveLogbookTemplate(f);
+    renderTemplateNote();
+    await exportLogbook({ blob: f });
+  } catch (err) { toast(err.message || 'That file could not be used as the template', 6000); }
+});
+async function renderTemplateNote() {
+  const t = await getLogbookTemplate();
+  $('templateNote').textContent = t ? `Logbook template: ${t.name}` : '';
+  $('changeTemplateBtn').hidden = !t;
+}
+
 $('exportAllBtn').addEventListener('click', () => {
   download(`asum-lung-cases-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(cases, null, 2), 'application/json');
 });

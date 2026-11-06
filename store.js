@@ -136,7 +136,7 @@ class CloudStore {
     if (error) throw error;
     this.cases = data.map((r) => this._fromRow(r));
     // Supervisor feedback (table may not exist yet if 002_feedback.sql hasn't been run).
-    const fb = await this.sb.from('feedback').select('id, case_id, author, body, created_at').order('created_at');
+    const fb = await this._feedbackQuery(this.sb, (q) => q);
     const byCase = {};
     (fb.data || []).forEach((f) => { (byCase[f.case_id] = byCase[f.case_id] || []).push(f); });
     this.cases.forEach((c) => { c.feedback = byCase[c.id] || []; });
@@ -181,13 +181,22 @@ class CloudStore {
     if (error) throw error;
     if (!data) return null;
     const c = this._fromRow(data);
-    const fb = await this.sb.from('feedback').select('id, case_id, author, body, created_at').eq('case_id', id).order('created_at');
+    const fb = await this._feedbackQuery(this.sb, (q) => q.eq('case_id', id));
     c.feedback = fb.data || [];
     const i = this.cases.findIndex((x) => x.id === id);
     if (i !== -1) this.cases[i] = c;
     return c;
   }
   hasPendingSaves() { return this.save.pending(); }
+  // Feedback rows, including the supervisor's Yes/No answers if 004_feedback_ticks.sql has been run.
+  async _feedbackQuery(client, filter) {
+    const cols = 'id, case_id, author, body, created_at';
+    let res = await filter(client.from('feedback').select(`${cols}, adequate_images, correct_interpretation`)).order('created_at');
+    if (res.error && /adequate_images|correct_interpretation|column/i.test(res.error.message || '')) {
+      res = await filter(client.from('feedback').select(cols)).order('created_at');
+    }
+    return res;
+  }
   async _saveNow(c) { await this._update(c, { data: this._toData(c) }); }
   async remove(c) {
     const paths = [...(c.videos || []), ...((c.imaging && c.imaging.images) || [])].map((v) => v.id);
@@ -274,7 +283,7 @@ class CloudStore {
     // the database rules then allow access to this one case's feedback only.
     const sc = this._shareClient(token);
     const idRes = await sc.from('cases').select('id').eq('share_token', token).maybeSingle();
-    const fb = await sc.from('feedback').select('id, author, body, created_at').order('created_at');
+    const fb = await this._feedbackQuery(sc, (q) => q);
     c._caseId = idRes.data && idRes.data.id;
     c.feedback = fb.data || [];
     c.feedbackEnabled = !!c._caseId && !fb.error;
@@ -290,10 +299,16 @@ class CloudStore {
     }
     return this._sc;
   }
-  async addFeedback(token, caseId, author, body) {
-    const { data, error } = await this._shareClient(token).from('feedback')
-      .insert({ case_id: caseId, author: author || null, body })
-      .select('id, author, body, created_at').single();
+  async addFeedback(token, caseId, author, body, ticks = {}) {
+    const row = { case_id: caseId, author: author || null, body };
+    if (ticks.adequate_images != null) row.adequate_images = ticks.adequate_images;
+    if (ticks.correct_interpretation != null) row.correct_interpretation = ticks.correct_interpretation;
+    let { data, error } = await this._shareClient(token).from('feedback').insert(row).select('*').single();
+    if (error && /adequate_images|correct_interpretation/.test(error.message || '')) {
+      // Yes/No columns not added yet (004_feedback_ticks.sql) — still send the comment.
+      delete row.adequate_images; delete row.correct_interpretation;
+      ({ data, error } = await this._shareClient(token).from('feedback').insert(row).select('*').single());
+    }
     if (error) throw new Error(error.code === '42501' ? 'Could not send — this link may have been turned off' : error.message);
     return data;
   }
