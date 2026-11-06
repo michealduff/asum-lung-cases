@@ -780,6 +780,32 @@ $('exportAllBtn').addEventListener('click', () => {
   download(`asum-lung-cases-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(cases, null, 2), 'application/json');
 });
 
+// ---------- Updates ----------
+// Phones (especially Home Screen apps) can keep showing an old copy of the page. Compare the
+// running version with the live one; on start-up switch to the new one straight away, later
+// show a banner so nothing being typed is interrupted.
+const RUNNING_VERSION = ((document.querySelector('script[src*="app.js"]') || {}).src || '').match(/v=(\d+)/)?.[1];
+let updateShown = false;
+async function checkForUpdate(applyNow) {
+  if (!RUNNING_VERSION || updateShown) return;
+  try {
+    const res = await fetch(`${location.pathname}?check=${Date.now()}`, { cache: 'no-store' });
+    const latest = (await res.text()).match(/app\.js\?v=(\d+)/)?.[1];
+    if (!latest || latest === RUNNING_VERSION) return;
+    const go = () => location.replace(`${location.pathname}?v=${latest}${location.hash}`);
+    if (applyNow && !(store.hasPendingSaves && store.hasPendingSaves())) return go();
+    updateShown = true;
+    document.body.append(el('div', { class: 'update-banner' },
+      el('span', {}, 'A new version of the app is available.'),
+      el('button', { type: 'button', class: 'primary', onclick: () => {
+        if (store.hasPendingSaves && store.hasPendingSaves()) { toast('Saving… try again in a moment'); return; }
+        go();
+      } }, 'Update')));
+  } catch { /* offline — try again later */ }
+}
+checkForUpdate(true);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdate(false); });
+
 // ---------- Start ----------
 // Load the signed-in user's cases once, the first time the app (not a share link) is shown.
 let started = false;
