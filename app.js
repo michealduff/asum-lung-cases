@@ -69,6 +69,7 @@ function route() { routing = routing.then(doRoute).catch((e) => { console.error(
 async function doRoute() {
   const [kind, id] = location.hash.replace(/^#/, '').split('/');
   if (kind === 's') return showShared(id);
+  await ensureStarted();
 
   $('accountBtn').hidden = store.mode !== 'cloud' || !store.user;
   if (store.mode === 'cloud' && !store.user) return showOnly('loginView', { back: false });
@@ -335,19 +336,83 @@ function refreshDerived() {
 });
 
 // ---------- Read-only views ----------
+// Findings that are the normal default; anything else is highlighted on the supervisor page.
+const NORMAL_LINES = new Set(['Pleural line: thin, smooth, sliding present', 'Subpleural: no consolidation',
+  'A-lines', 'No effusion', 'Curtain sign present', 'Spine sign']);
+const textLines = (t) => (t || '').split('\n').map((l) => l.trim()).filter(Boolean);
+const zoneKey = (s) => (s || '').toUpperCase().replace(/\s+/g, '').replace(/PLAPS$/, '-PLAPS').replace('--', '-');
+
 function showView(c, isSupervisor) {
   showOnly('viewView', { back: !isSupervisor });
-  $('viewHeading').textContent = `Lung ultrasound — Case #${c.number}${c.title ? ` · ${c.title}` : ''}`;
-  $('viewMeta').textContent = [c.date && formatDate(c.date), `${(c.videos || []).length} video(s)`].filter(Boolean).join(' · ');
-  $('viewReport').textContent = buildReport(c);
   $('viewNote').hidden = isSupervisor;
-  const host = $('viewVideos');
-  host.innerHTML = '';
-  (c.videos || []).forEach(async (meta) => {
-    const card = el('div', { class: 'card view-video' }, el('h3', {}, meta.label || meta.name));
-    host.append(card);
-    card.append(await videoEl(meta));
+  const body = $('viewBody');
+  body.innerHTML = '';
+  const zones = c.zones || {};
+  const videos = c.videos || [];
+  const videoZones = new Set(videos.map((v) => zoneKey(v.label)).filter((k) => ZONE_ORDER.includes(k)));
+  const section = (title, ...kids) => el('section', { class: 'rp-card' }, el('h2', { class: 'rp-h' }, title), ...kids);
+
+  // Header
+  const statuses = ZONE_ORDER.map((z) => zoneStatus(z, zones[z] || {}));
+  const nAbn = statuses.filter((s) => s === 'abnormal').length;
+  body.append(el('header', { class: 'rp-hero' },
+    el('div', { class: 'rp-kicker' }, 'PoCUS lung ultrasound'),
+    el('h1', {}, `Case #${c.number}`),
+    c.title ? el('div', { class: 'rp-sub' }, c.title) : '',
+    el('div', { class: 'rp-meta' },
+      c.date ? el('span', { class: 'pill' }, `📅 ${formatDate(c.date)}`) : '',
+      videos.length ? el('span', { class: 'pill' }, `🎥 ${videos.length} clip${videos.length > 1 ? 's' : ''}`) : '',
+      el('span', { class: `pill ${nAbn ? 'pill-abn' : 'pill-ok'}` }, nAbn ? `${nAbn} abnormal zone${nAbn > 1 ? 's' : ''}` : 'All zones normal'))));
+
+  // Indication
+  const ind = textLines(c.indication);
+  if (ind.length) body.append(section('Indication', el('ul', { class: 'rp-list' }, ind.map((l) => el('li', {}, l)))));
+
+  // Summary
+  const pats = [...(c.patterns || []), (c.patternOther || '').trim()].filter(Boolean);
+  const integ = textLines(c.integration);
+  body.append(section('Summary',
+    el('div', { class: 'rp-label' }, 'Interpretation / pattern'),
+    pats.length ? el('div', { class: 'rp-tags' }, pats.map((p) => el('span', { class: `tag ${p === 'Normal' ? 'tag-ok' : ''}` }, p)))
+      : el('p', { class: 'rp-empty' }, 'Not yet recorded'),
+    el('div', { class: 'rp-label' }, 'Integration'),
+    integ.length ? el('blockquote', { class: 'rp-quote' }, integ.map((l) => el('p', {}, l)))
+      : el('p', { class: 'rp-empty' }, 'Not yet recorded')));
+
+  // Videos
+  if (videos.length) {
+    const vs = section('Scan clips');
+    videos.forEach(async (meta) => {
+      const fig = el('figure', { class: 'rp-video', id: `clip-${zoneKey(meta.label)}` }, el('figcaption', {}, meta.label || meta.name));
+      vs.append(fig);
+      fig.prepend(await videoEl(meta));
+    });
+    body.append(vs);
+  }
+
+  // Zone map + findings
+  const mapSide = (side, list) => el('div', { class: 'zone-side' }, el('h4', {}, side),
+    el('div', { class: 'zone-grid' }, list.map((z) => el('button', {
+      type: 'button', class: `zone-btn s-${zoneStatus(z, zones[z] || {})}${z.includes('PLAPS') ? ' plaps' : ''}`,
+      onclick: () => $(`vz-${z}`).scrollIntoView({ behavior: 'smooth', block: 'start' }),
+    }, z))));
+  const findings = section('Findings by zone',
+    el('div', { class: 'zone-map' }, mapSide('Right', ['R1', 'R2', 'R3', 'R4', 'R-PLAPS']), mapSide('Left', ['L1', 'L2', 'L3', 'L4', 'L-PLAPS'])),
+    el('p', { class: 'legend' }, el('span', { class: 'dot normal' }), 'Normal ', el('span', { class: 'dot abnormal' }), 'Abnormal ', el('span', { class: 'dot empty' }), 'Not documented'));
+  ZONE_ORDER.forEach((z) => {
+    const d = zones[z] || {};
+    const st = zoneStatus(z, d);
+    const lines = st === 'empty' ? [] : zoneLines(z, d);
+    const clip = videoZones.has(z) ? el('button', { type: 'button', class: 'clip-link',
+      onclick: () => $(`clip-${z}`).scrollIntoView({ behavior: 'smooth', block: 'center' }) }, '▶ clip') : '';
+    findings.append(el('div', { class: `rp-zone z-${st}`, id: `vz-${z}` },
+      el('div', { class: 'rp-zone-head' },
+        el('span', { class: 'rp-zone-name' }, z),
+        el('span', { class: 'rp-zone-status' }, { normal: 'Normal', abnormal: 'Abnormal', partial: 'Partly documented', empty: 'Not documented' }[st]),
+        clip),
+      lines.length ? el('ul', { class: 'rp-zone-list' }, lines.map((l) => el('li', { class: NORMAL_LINES.has(l) ? '' : 'hl' }, l))) : ''));
   });
+  body.append(findings);
 }
 
 async function showShared(token) {
@@ -357,11 +422,10 @@ async function showShared(token) {
   try { c = await store.getShared(token); } catch (e) { console.error(e); }
   if (!c) {
     showOnly('viewView', { back: false });
-    $('viewHeading').textContent = 'Case not found';
-    $('viewMeta').textContent = 'This link may have been turned off. Ask for a new link.';
-    $('viewReport').textContent = '';
-    $('viewVideos').innerHTML = '';
     $('viewNote').hidden = true;
+    $('viewBody').replaceChildren(el('section', { class: 'rp-card' },
+      el('h2', { class: 'rp-h' }, 'Case not found'),
+      el('p', {}, 'This link may have been turned off. Ask for a new link.')));
     return;
   }
   document.title = `Lung US case #${c.number}`;
@@ -403,12 +467,14 @@ $('exportAllBtn').addEventListener('click', () => {
 });
 
 // ---------- Start ----------
-(async () => {
-  if (!location.hash.startsWith('#s/')) {
-    try {
-      const { needsLogin } = await store.init();
-      if (!needsLogin) cases = await store.list();
-    } catch (e) { console.error(e); toast('Could not load cases — check connection'); }
-  }
-  route();
-})();
+// Load the signed-in user's cases once, the first time the app (not a share link) is shown.
+let started = false;
+async function ensureStarted() {
+  if (started) return;
+  started = true;
+  try {
+    const { needsLogin } = await store.init();
+    if (!needsLogin) cases = await store.list();
+  } catch (e) { console.error(e); started = false; toast('Could not load cases — check connection'); }
+}
+route();
