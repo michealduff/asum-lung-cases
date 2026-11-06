@@ -365,7 +365,7 @@ async function renderImages() {
     cap.value = meta.caption || '';
     cap.addEventListener('input', () => { meta.caption = cap.value; touch(); });
     host.append(el('div', { class: 'image-item' },
-      el('img', { src: await mediaSrc(meta), alt: meta.caption || meta.name, loading: 'lazy' }),
+      el('img', { src: await mediaSrc(meta), alt: meta.caption || meta.name }),
       el('div', { class: 'row' }, cap,
         el('button', { type: 'button', class: 'danger', onclick: async () => {
           if (!confirm('Remove this image?')) return;
@@ -719,7 +719,7 @@ function showView(c, isSupervisor) {
       sec.append(fig);
       const src = await mediaSrc(meta);
       fig.append(
-        el('a', { href: src, target: '_blank', rel: 'noopener' }, el('img', { src, alt: meta.caption || meta.name, loading: 'lazy' })),
+        el('a', { href: src, target: '_blank', rel: 'noopener' }, el('img', { src, alt: meta.caption || meta.name })),
         el('figcaption', {}, meta.caption || meta.name, el('span', { class: 'rp-zoom' }, ' · tap to enlarge')));
     });
     body.append(sec);
