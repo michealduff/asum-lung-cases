@@ -17,7 +17,7 @@ function loadDocx() {
 
 const lines = (text) => (text || '').split('\n').map((l) => l.trim()).filter(Boolean);
 
-function caseParagraphs(D, c, { pageBreak }) {
+function caseParagraphs(D, c, { pageBreak }, images) {
   const { Paragraph, TextRun, HeadingLevel, ExternalHyperlink } = D;
   const bullet = (text) => new Paragraph({ text, bullet: { level: 0 } });
   const label = (text) => new Paragraph({ children: [new TextRun({ text, bold: true })], spacing: { before: 120 } });
@@ -52,6 +52,19 @@ function caseParagraphs(D, c, { pageBreak }) {
     out.push(label(z));
     zoneLines(z, (c.zones || {})[z] || {}).forEach((l) => out.push(bullet(l)));
   });
+
+  const im = c.imaging || {};
+  const imgs = (images && images[c.id]) || [];
+  if (lines(im.notes).length || imgs.length) {
+    out.push(new Paragraph({ heading: HeadingLevel.HEADING_2, text: 'Comparison with further imaging' }));
+    lines(im.notes).forEach((l) => out.push(bullet(l)));
+    imgs.forEach(({ meta, data }) => {
+      const w = meta.width || 600; const h = meta.height || 450;
+      const scale = Math.min(1, 560 / w, 560 / h);
+      out.push(new Paragraph({ spacing: { before: 160 }, children: [new D.ImageRun({ type: 'jpg', data, transformation: { width: Math.round(w * scale), height: Math.round(h * scale) } })] }));
+      if (meta.caption) out.push(new Paragraph({ children: [new TextRun({ text: meta.caption, italics: true })] }));
+    });
+  }
   return out;
 }
 
@@ -66,7 +79,19 @@ async function buildWordBlob(caseList) {
       new Paragraph({ text: `${sorted.length} cases · exported ${new Date().toLocaleDateString('en-AU')}` }),
     );
   }
-  sorted.forEach((c, i) => children.push(...caseParagraphs(D, c, { pageBreak: sorted.length > 1 || i > 0 })));
+  // Fetch each case's comparison images so they can be embedded in the document.
+  const images = {};
+  for (const c of sorted) {
+    images[c.id] = [];
+    for (const meta of ((c.imaging && c.imaging.images) || [])) {
+      try {
+        const src = meta.sharedUrl || await store.videoSrc(meta);
+        const data = new Uint8Array(await (await fetch(src)).arrayBuffer());
+        images[c.id].push({ meta, data });
+      } catch (e) { console.error('image skipped', e); }
+    }
+  }
+  sorted.forEach((c, i) => children.push(...caseParagraphs(D, c, { pageBreak: sorted.length > 1 || i > 0 }, images)));
   const doc = new Document({
     creator: 'ASUM Lung Cases',
     title: 'PoCUS Lung Ultrasound Cases',

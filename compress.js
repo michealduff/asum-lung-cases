@@ -57,3 +57,17 @@ async function shrinkVideo(file, onProgress) {
 async function keepAwake() {
   try { return await navigator.wakeLock.request('screen'); } catch { return null; }
 }
+
+// Photos of CXR/CT etc.: resize to at most 2000 px on the long side and save as JPEG.
+async function shrinkImage(file) {
+  const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  const scale = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+  const w = Math.round(bmp.width * scale);
+  const h = Math.round(bmp.height * scale);
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  canvas.getContext('2d').drawImage(bmp, 0, 0, w, h);
+  bmp.close();
+  const blob = await new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not process image'))), 'image/jpeg', 0.85));
+  return { file: new File([blob], `${file.name.replace(/\.[^.]+$/, '')}.jpg`, { type: 'image/jpeg' }), width: w, height: h };
+}

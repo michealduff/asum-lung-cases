@@ -216,3 +216,14 @@ button:disabled { opacity: .6; }
 .storage-bar div { height: 100%; background: var(--accent); }
 .storage.warn { color: var(--abnormal); }
 .storage.warn .storage-bar div { background: var(--abnormal); }
+
+/* Comparison images */
+.image-list { display: grid; gap: 12px; margin-top: 12px; }
+.image-item { border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
+.image-item img { width: 100%; max-height: 360px; object-fit: contain; background: #000; border-radius: 8px; display: block; }
+.image-item .row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.image-item .row input { margin: 0; flex: 1; }
+.rp-image { margin: 14px 0 0; }
+.rp-image img { width: 100%; border-radius: 12px; background: #000; display: block; }
+.rp-image figcaption { font-size: 14px; font-weight: 600; margin-top: 6px; }
+.rp-zoom { font-weight: 400; color: var(--muted); }

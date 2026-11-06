@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex, nofollow">
   <meta name="referrer" content="no-referrer">
   <title>ASUM Lung Cases</title>
-  <link rel="stylesheet" href="styles.css?v=20261106144551">
+  <link rel="stylesheet" href="styles.css?v=20261106145511">
 </head>
 <body>
   <header class="topbar">
@@ -96,6 +96,18 @@
           <textarea id="f-integration" rows="4" placeholder="e.g. The combination of a BNP of 1000 and a bilateral gravity dependent interstitial syndrome with bilateral simple appearing pleural effusions favours pulmonary oedema"></textarea>
         </div>
 
+        <div class="card">
+          <h2>Comparison with further imaging</h2>
+          <p class="hint">E.g. CXR, CT chest or formal ultrasound, and how they compare with your scan.</p>
+          <textarea id="f-imagingNotes" rows="3" placeholder="One point per line, e.g.&#10;CXR: bilateral perihilar haziness and small effusions — concordant with PoCUS&#10;CT chest: …"></textarea>
+          <label class="upload-btn" style="margin-top:10px">
+            <input id="imageInput" type="file" accept="image/*" multiple>
+            <span class="primary-like">+ Add image</span>
+          </label>
+          <div id="imageProgress" class="progress" hidden><div class="bar"></div><span></span></div>
+          <div id="imageList" class="image-list"></div>
+        </div>
+
         <div class="card danger-zone">
           <button id="deleteBtn" class="danger">Delete case</button>
         </div>
@@ -126,11 +138,11 @@
 
   <div id="toast" class="toast" hidden></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
-  <script src="config.js?v=20261106144551"></script>
-  <script src="template.js?v=20261106144551"></script>
-  <script src="store.js?v=20261106144551"></script>
-  <script src="compress.js?v=20261106144551"></script>
-  <script src="word.js?v=20261106144551"></script>
-  <script src="app.js?v=20261106144551"></script>
+  <script src="config.js?v=20261106145511"></script>
+  <script src="template.js?v=20261106145511"></script>
+  <script src="store.js?v=20261106145511"></script>
+  <script src="compress.js?v=20261106145511"></script>
+  <script src="word.js?v=20261106145511"></script>
+  <script src="app.js?v=20261106145511"></script>
 </body>
 </html>

@@ -3,13 +3,13 @@
 //   LocalStore - browser only (localStorage + IndexedDB), used when config.js is blank
 //   CloudStore - Supabase (database + private video bucket + secret share links)
 
-const CASE_FIELDS = ['title', 'date', 'indication', 'patterns', 'patternOther', 'integration', 'zones', 'videos', 'createdAt', 'updatedAt', 'feedbackSeenAt'];
+const CASE_FIELDS = ['title', 'date', 'indication', 'patterns', 'patternOther', 'integration', 'zones', 'videos', 'imaging', 'createdAt', 'updatedAt', 'feedbackSeenAt'];
 const SHARE_DAYS = 90; // how long supervisor video links last before Share needs tapping again
 
 function blankCase(number) {
   return {
     number, title: '', date: new Date().toISOString().slice(0, 10), indication: '',
-    patterns: [], patternOther: '', integration: '', zones: {}, videos: [],
+    patterns: [], patternOther: '', integration: '', zones: {}, videos: [], imaging: { notes: '', images: [] },
     createdAt: Date.now(), updatedAt: Date.now(), shareToken: null, sharedUntil: null,
   };
 }
@@ -78,7 +78,8 @@ class LocalStore {
   async remove(c) {
     this.cases = this.cases.filter((x) => x.id !== c.id);
     this._persist();
-    await Promise.all((c.videos || []).map((v) => this._idb('readwrite', (s) => s.delete(v.id)).catch(() => {})));
+    const media = [...(c.videos || []), ...((c.imaging && c.imaging.images) || [])];
+    await Promise.all(media.map((v) => this._idb('readwrite', (s) => s.delete(v.id)).catch(() => {})));
   }
   async addVideo(c, file, onProgress) {
     const id = `${c.id}:${Date.now()}:${Math.random().toString(36).slice(2, 7)}`;
@@ -189,7 +190,7 @@ class CloudStore {
   hasPendingSaves() { return this.save.pending(); }
   async _saveNow(c) { await this._update(c, { data: this._toData(c) }); }
   async remove(c) {
-    const paths = (c.videos || []).map((v) => v.id);
+    const paths = [...(c.videos || []), ...((c.imaging && c.imaging.images) || [])].map((v) => v.id);
     if (paths.length) await this.sb.storage.from('videos').remove(paths);
     const { error } = await this.sb.from('cases').delete().eq('id', c.id);
     if (error) throw error;
@@ -237,12 +238,13 @@ class CloudStore {
   }
   // Signed links let the supervisor play private videos without logging in.
   async _signAll(c) {
-    const paths = (c.videos || []).map((v) => v.id);
+    const paths = [...(c.videos || []), ...((c.imaging && c.imaging.images) || [])].map((v) => v.id);
     if (!paths.length) return [];
     const { data, error } = await this.sb.storage.from('videos').createSignedUrls(paths, SHARE_DAYS * 86400);
     if (error) throw error;
     return data.map((d) => ({ id: d.path, url: d.signedUrl }));
   }
+
   async refreshShare(c) {
     if (!c.shareToken) return;
     c.sharedUntil = Date.now() + SHARE_DAYS * 86400 * 1000;
@@ -266,6 +268,8 @@ class CloudStore {
     const urls = Object.fromEntries((r.shared_videos || []).map((v) => [v.id, v.url]));
     const c = { ...blankCase(r.number), ...r.data, number: r.number };
     c.videos = (c.videos || []).map((v) => ({ ...v, sharedUrl: urls[v.id] || '' }));
+    c.imaging = c.imaging || { notes: '', images: [] };
+    c.imaging.images = (c.imaging.images || []).map((v) => ({ ...v, sharedUrl: urls[v.id] || '' }));
     // A separate, never-signed-in client that sends the share code with each request;
     // the database rules then allow access to this one case's feedback only.
     const sc = this._shareClient(token);

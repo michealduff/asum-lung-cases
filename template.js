@@ -131,6 +131,14 @@ function buildReport(c) {
   ZONE_ORDER.forEach((z) => {
     out.push('', z, ...zoneLines(z, c.zones[z]).map((l) => `\t•\t${l}`));
   });
+  const im = c.imaging || {};
+  const imNotes = bullets(im.notes || '');
+  const imgs = im.images || [];
+  if (imNotes.length || imgs.length) {
+    out.push('', '', 'COMPARISON WITH FURTHER IMAGING');
+    out.push(...imNotes);
+    if (imgs.length) out.push(`\t•\tImages: ${imgs.map((i) => i.caption || i.name).join(', ')}`);
+  }
   return out.join('\n') + '\n';
 }
 

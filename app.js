@@ -194,12 +194,13 @@ const STORAGE_LIMIT = 1024 * 1048576; // Supabase free plan
 function renderStorageMeter() {
   const box = $('storageMeter');
   if (store.mode !== 'cloud') { box.hidden = true; return; }
-  const used = cases.reduce((sum, c) => sum + (c.videos || []).reduce((a, v) => a + (v.size || 0), 0), 0);
+  const used = cases.reduce((sum, c) => sum + [...(c.videos || []), ...((c.imaging && c.imaging.images) || [])]
+    .reduce((a, v) => a + (v.size || 0), 0), 0);
   const frac = Math.min(1, used / STORAGE_LIMIT);
   box.hidden = false;
   box.className = `storage${frac > 0.8 ? ' warn' : ''}`;
   box.replaceChildren(
-    el('div', { class: 'storage-text' }, `Video storage: ${used < 1048576 * 1024 ? `${Math.round(used / 1048576)} MB` : `${(used / 1073741824).toFixed(2)} GB`} of 1 GB used`,
+    el('div', { class: 'storage-text' }, `Storage: ${used < 1048576 * 1024 ? `${Math.round(used / 1048576)} MB` : `${(used / 1073741824).toFixed(2)} GB`} of 1 GB used`,
       frac > 0.8 ? ' — getting full; delete old clips or upgrade Supabase' : ''),
     el('div', { class: 'storage-bar' }, el('div', { style: `width:${Math.max(1, Math.round(frac * 100))}%` })));
 }
@@ -215,6 +216,8 @@ function openCase(id) {
   current = cases.find((c) => c.id === id);
   ZONE_ORDER.forEach((z) => { current.zones[z] = current.zones[z] || { notes: '' }; });
   current.videos = current.videos || [];
+  current.imaging = current.imaging || { notes: '', images: [] };
+  current.imaging.images = current.imaging.images || [];
   current.patterns = current.patterns || [];
   showOnly('editView');
   $('caseHeading').textContent = `Case #${current.number}`;
@@ -223,9 +226,11 @@ function openCase(id) {
   $('f-indication').value = current.indication || '';
   $('f-patternOther').value = current.patternOther || '';
   $('f-integration').value = current.integration || '';
+  $('f-imagingNotes').value = current.imaging.notes || '';
   renderShare();
   renderOwnerFeedback();
   renderVideos();
+  renderImages();
   renderZoneCards();
   renderPatternChips();
   refreshDerived();
@@ -344,6 +349,70 @@ $('videoInput').addEventListener('change', async (e) => {
   if (current === caseRef) renderVideos();
 });
 
+async function mediaSrc(meta) {
+  try {
+    const src = meta.sharedUrl || await store.videoSrc(meta);
+    if (src) objectUrls.push(src);
+    return src;
+  } catch (e) { console.error(e); return ''; }
+}
+
+async function renderImages() {
+  const host = $('imageList');
+  host.innerHTML = '';
+  for (const meta of current.imaging.images) {
+    const cap = el('input', { placeholder: 'Caption, e.g. CXR 05/11 – bilateral effusions' });
+    cap.value = meta.caption || '';
+    cap.addEventListener('input', () => { meta.caption = cap.value; touch(); });
+    host.append(el('div', { class: 'image-item' },
+      el('img', { src: await mediaSrc(meta), alt: meta.caption || meta.name, loading: 'lazy' }),
+      el('div', { class: 'row' }, cap,
+        el('button', { type: 'button', class: 'danger', onclick: async () => {
+          if (!confirm('Remove this image?')) return;
+          try {
+            await store.removeVideo(current, meta);
+            current.imaging.images = current.imaging.images.filter((v) => v.id !== meta.id);
+            touch();
+            await store.refreshShare(current);
+            renderImages();
+          } catch (e) { toast(e.message || 'Could not remove image'); }
+        } }, 'Remove'))));
+  }
+}
+
+function setImageProgress(label, frac) {
+  const box = $('imageProgress');
+  box.hidden = frac == null;
+  if (frac == null) return;
+  box.querySelector('.bar').style.width = `${Math.round(frac * 100)}%`;
+  box.querySelector('span').textContent = `${label} ${Math.round(frac * 100)}%`;
+}
+
+$('imageInput').addEventListener('change', async (e) => {
+  const files = [...e.target.files];
+  e.target.value = '';
+  if (!files.length) return;
+  const caseRef = current;
+  for (const [i, f] of files.entries()) {
+    const of = files.length > 1 ? ` (${i + 1} of ${files.length})` : '';
+    let up = f; let width; let height;
+    try { ({ file: up, width, height } = await shrinkImage(f)); } catch (err) {
+      console.error(err);
+      if (f.size > 15 * 1048576) { toast(`Couldn't process ${f.name}`, 5000); continue; }
+    }
+    try {
+      setImageProgress(`Uploading image${of}…`, 0);
+      const meta = await store.addVideo(caseRef, up, (p) => setImageProgress(`Uploading image${of}…`, p));
+      Object.assign(meta, { name: f.name, caption: '', width, height });
+      caseRef.imaging.images.push(meta);
+      if (current === caseRef) touch(); else store.save(caseRef);
+    } catch (err) { toast(`Could not upload ${f.name}: ${err.message || err}`, 6000); }
+  }
+  setImageProgress(null);
+  try { await store.refreshShare(caseRef); } catch (err) { console.error(err); }
+  if (current === caseRef) renderImages();
+});
+
 function chipGroup(field, getVal, setVal) {
   const wrap = el('div', { class: 'chips' });
   const draw = () => {
@@ -435,6 +504,8 @@ function refreshDerived() {
     } }, `+ ${p}`)));
   }
 }
+
+$('f-imagingNotes').addEventListener('input', (e) => { current.imaging.notes = e.target.value; touch(); });
 
 [['f-title', 'title'], ['f-date', 'date'], ['f-indication', 'indication'],
   ['f-patternOther', 'patternOther'], ['f-integration', 'integration']].forEach(([id, key]) => {
@@ -635,6 +706,25 @@ function showView(c, isSupervisor) {
       lines.length ? el('ul', { class: 'rp-zone-list' }, lines.map((l) => el('li', { class: NORMAL_LINES.has(l) ? '' : 'hl' }, l))) : ''));
   });
   body.append(findings);
+
+  // Comparison with further imaging
+  const im = c.imaging || {};
+  const imLines = textLines(im.notes);
+  const imgs = im.images || [];
+  if (imLines.length || imgs.length) {
+    const sec = section('Comparison with further imaging');
+    if (imLines.length) sec.append(el('ul', { class: 'rp-list' }, imLines.map((l) => el('li', {}, l))));
+    imgs.forEach(async (meta) => {
+      const fig = el('figure', { class: 'rp-image' });
+      sec.append(fig);
+      const src = await mediaSrc(meta);
+      fig.append(
+        el('a', { href: src, target: '_blank', rel: 'noopener' }, el('img', { src, alt: meta.caption || meta.name, loading: 'lazy' })),
+        el('figcaption', {}, meta.caption || meta.name, el('span', { class: 'rp-zoom' }, ' · tap to enlarge')));
+    });
+    body.append(sec);
+  }
+
   if (store.mode === 'cloud') body.append(supervisorFeedbackSection(c));
 }
 
