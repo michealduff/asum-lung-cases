@@ -39,7 +39,7 @@ function setSaveStatus(s) {
   n.className = `save-status ${s}`;
 }
 
-const store = createStore(setSaveStatus);
+const store = createStore(setSaveStatus, onConflict);
 let cases = [];
 let current = null;
 
@@ -51,6 +51,59 @@ async function videoEl(meta) {
   } catch (e) { console.error(e); }
   return v;
 }
+
+// ---------- Keeping copies in step across devices ----------
+function putCase(c) {
+  [cases, store.cases].forEach((arr) => {
+    if (!arr) return;
+    const i = arr.findIndex((x) => x.id === c.id);
+    if (i !== -1) arr[i] = c;
+  });
+}
+function dropCase(id) {
+  cases = cases.filter((x) => x.id !== id);
+  if (store.cases) store.cases = store.cases.filter((x) => x.id !== id);
+}
+function reopenKeepingPlace(id) {
+  const y = window.scrollY;
+  openCase(id);
+  window.scrollTo(0, y);
+}
+// Called by the store when a save was refused because the case changed elsewhere.
+function onConflict(latest, stale) {
+  if (!latest) {
+    dropCase(stale.id);
+    if (current && current.id === stale.id) { toast('This case was deleted on another device', 5000); location.hash = ''; }
+    return;
+  }
+  putCase(latest);
+  if (current && current.id === stale.id) reopenKeepingPlace(latest.id);
+  toast('This case was changed on another device — now showing the latest version. Please re-check your last change.', 6000);
+}
+// When the app comes back to the screen (switching tabs/apps, unlocking the phone),
+// pick up any changes and new feedback from other devices before editing continues.
+async function refreshFromServer() {
+  if (store.mode !== 'cloud' || !store.user || !started || location.hash.startsWith('#s/') || store.hasPendingSaves()) return;
+  try {
+    if (current) {
+      const latest = await store.fetchCase(current.id);
+      if (!latest) { dropCase(current.id); toast('This case was deleted on another device', 5000); location.hash = ''; return; }
+      if (latest._version !== current._version) {
+        putCase(latest);
+        reopenKeepingPlace(latest.id);
+        toast('Updated with changes made on another device', 4000);
+      } else {
+        current.feedback = latest.feedback;
+        putCase(current);
+        renderOwnerFeedback();
+      }
+    } else {
+      cases = await store.list();
+      if (!$('listView').hidden) showList();
+    }
+  } catch (e) { console.error(e); }
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshFromServer(); });
 
 // ---------- Routing ----------
 //  #            case list           #new         create a case
@@ -562,7 +615,7 @@ $('deleteBtn').addEventListener('click', async () => {
   if (!confirm(`Delete case #${current.number} and its videos? This cannot be undone.`)) return;
   try {
     await store.remove(current);
-    cases = cases.filter((c) => c.id !== current.id);
+    dropCase(current.id);
     location.hash = '';
   } catch (e) { toast(e.message || 'Could not delete'); }
 });

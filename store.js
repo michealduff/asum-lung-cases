@@ -24,15 +24,21 @@ function randomToken() {
 // Debounce saves per case so typing doesn't hammer storage.
 function makeDebouncedSaver(saveNow, onStatus) {
   const timers = new Map();
-  return (c) => {
+  const save = (c) => {
     onStatus('saving');
     clearTimeout(timers.get(c.id));
     timers.set(c.id, setTimeout(async () => {
       timers.delete(c.id);
       try { await saveNow(c); onStatus(timers.size ? 'saving' : 'saved'); }
-      catch (e) { console.error(e); onStatus('error'); }
+      catch (e) {
+        if (e.conflict) { onStatus(''); return; } // newer version loaded instead; app has told the user
+        console.error(e); onStatus('error');
+      }
     }, 600));
   };
+  save.pending = () => timers.size > 0;
+  save.cancel = (id) => { clearTimeout(timers.get(id)); timers.delete(id); };
+  return save;
 }
 
 // ---------------- Local ----------------
@@ -92,12 +98,14 @@ class LocalStore {
 
 // ---------------- Supabase ----------------
 class CloudStore {
-  constructor(cfg, onStatus) {
+  constructor(cfg, onStatus, onConflict) {
     this.mode = 'cloud';
     this.cfg = cfg;
     this.sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
     this.save = makeDebouncedSaver((c) => this._saveNow(c), onStatus);
+    this.onConflict = onConflict || (() => {});
     this.cases = [];
+    this._queue = Promise.resolve();
   }
   async init() {
     const { data } = await this.sb.auth.getSession();
@@ -112,7 +120,8 @@ class CloudStore {
   async signOut() { await this.sb.auth.signOut(); this.user = null; }
 
   _fromRow(r) {
-    return { ...blankCase(r.number), ...r.data, id: r.id, number: r.number, shareToken: r.share_token, sharedUntil: (r.data && r.data.sharedUntil) || null };
+    return { ...blankCase(r.number), ...r.data, id: r.id, number: r.number, shareToken: r.share_token,
+      sharedUntil: (r.data && r.data.sharedUntil) || null, _version: r.updated_at };
   }
   _toData(c) {
     const d = {};
@@ -121,7 +130,7 @@ class CloudStore {
     return d;
   }
   async list() {
-    const { data, error } = await this.sb.from('cases').select('id, number, data, share_token').order('number', { ascending: false });
+    const { data, error } = await this.sb.from('cases').select('id, number, data, share_token, updated_at').order('number', { ascending: false });
     if (error) throw error;
     this.cases = data.map((r) => this._fromRow(r));
     // Supervisor feedback (table may not exist yet if 002_feedback.sql hasn't been run).
@@ -136,17 +145,48 @@ class CloudStore {
       if (attempt) await this.list();
       const c = blankCase(nextNumber(this.cases));
       const { data, error } = await this.sb.from('cases')
-        .insert({ number: c.number, data: this._toData(c) }).select('id, number, data, share_token').single();
+        .insert({ number: c.number, data: this._toData(c) }).select('id, number, data, share_token, updated_at').single();
       if (!error) { const nc = this._fromRow(data); this.cases.unshift(nc); return nc; }
       if (error.code !== '23505') throw error; // 23505 = case number already taken (another device); retry
     }
     throw new Error('Could not create a new case number');
   }
-  async _saveNow(c) {
-    const { error } = await this.sb.from('cases')
-      .update({ data: this._toData(c), updated_at: new Date().toISOString() }).eq('id', c.id);
-    if (error) throw error;
+  // Every write checks the case hasn't been changed elsewhere since this copy was loaded
+  // (its updated_at must still match). If it has, nothing is overwritten: the newer version
+  // is fetched and handed to the app instead. Writes from this device run one at a time.
+  _update(c, fields) {
+    const run = async () => {
+      let q = this.sb.from('cases').update({ ...fields, updated_at: new Date().toISOString() }).eq('id', c.id);
+      if (c._version) q = q.eq('updated_at', c._version);
+      const { data, error } = await q.select('updated_at');
+      if (error) throw error;
+      if (!data.length) {
+        this.save.cancel(c.id);
+        const latest = await this.fetchCase(c.id);
+        this.onConflict(latest, c);
+        const err = new Error('This case was changed on another device — showing the latest version');
+        err.conflict = true;
+        throw err;
+      }
+      c._version = data[0].updated_at;
+    };
+    const p = this._queue.then(run, run);
+    this._queue = p.catch(() => {});
+    return p;
   }
+  async fetchCase(id) {
+    const { data, error } = await this.sb.from('cases').select('id, number, data, share_token, updated_at').eq('id', id).maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    const c = this._fromRow(data);
+    const fb = await this.sb.from('feedback').select('id, case_id, author, body, created_at').eq('case_id', id).order('created_at');
+    c.feedback = fb.data || [];
+    const i = this.cases.findIndex((x) => x.id === id);
+    if (i !== -1) this.cases[i] = c;
+    return c;
+  }
+  hasPendingSaves() { return this.save.pending(); }
+  async _saveNow(c) { await this._update(c, { data: this._toData(c) }); }
   async remove(c) {
     const paths = (c.videos || []).map((v) => v.id);
     if (paths.length) await this.sb.storage.from('videos').remove(paths);
@@ -182,9 +222,7 @@ class CloudStore {
     if (!c.shareToken) return;
     c.sharedUntil = Date.now() + SHARE_DAYS * 86400 * 1000;
     const shared = await this._signAll(c);
-    const { error } = await this.sb.from('cases')
-      .update({ share_token: c.shareToken, shared_videos: shared, data: this._toData(c) }).eq('id', c.id);
-    if (error) throw error;
+    await this._update(c, { share_token: c.shareToken, shared_videos: shared, data: this._toData(c) });
   }
   async share(c) {
     c.shareToken = c.shareToken || randomToken();
@@ -193,8 +231,7 @@ class CloudStore {
   }
   async unshare(c) {
     c.shareToken = null; c.sharedUntil = null;
-    const { error } = await this.sb.from('cases').update({ share_token: null, shared_videos: [], data: this._toData(c) }).eq('id', c.id);
-    if (error) throw error;
+    await this._update(c, { share_token: null, shared_videos: [], data: this._toData(c) });
   }
   async getShared(token) {
     const { data, error } = await this.sb.rpc('get_shared_case', { token });
@@ -233,8 +270,8 @@ class CloudStore {
   }
 }
 
-function createStore(onStatus) {
+function createStore(onStatus, onConflict) {
   const cfg = window.ASUM_CONFIG || {};
-  if (cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase) return new CloudStore(cfg, onStatus);
+  if (cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase) return new CloudStore(cfg, onStatus, onConflict);
   return new LocalStore(onStatus);
 }
