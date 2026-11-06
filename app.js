@@ -130,7 +130,9 @@ function showList() {
         el('div', { class: 'meta' }, pats)),
       el('div', { class: 'meta right' },
         c.date ? formatDate(c.date) : '',
-        c.shareToken ? el('div', { class: 'shared-tag' }, 'Shared') : '')));
+        c.shareToken ? el('div', { class: 'shared-tag' }, 'Shared') : '',
+        (c.feedback || []).length ? el('div', { class: `fb-tag${unseenFeedback(c) ? ' new' : ''}` },
+          unseenFeedback(c) ? `💬 ${unseenFeedback(c)} new` : `💬 ${c.feedback.length}`) : '')));
   });
 }
 
@@ -154,6 +156,7 @@ function openCase(id) {
   $('f-patternOther').value = current.patternOther || '';
   $('f-integration').value = current.integration || '';
   renderShare();
+  renderOwnerFeedback();
   renderVideos();
   renderZoneCards();
   renderPatternChips();
@@ -395,6 +398,55 @@ function playClipHere(zone) {
   video.play().catch(() => {});
 }
 
+// ---------- Feedback ----------
+const fbTime = (t) => new Date(t).toLocaleString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+const unseenFeedback = (c) => (c.feedback || []).filter((f) => !c.feedbackSeenAt || new Date(f.created_at).getTime() > c.feedbackSeenAt).length;
+function feedbackList(items) {
+  if (!items.length) return el('p', { class: 'rp-empty' }, 'No feedback yet.');
+  return el('div', { class: 'fb-list' }, [...items].reverse().map((f) => el('div', { class: 'fb-item' },
+    el('div', { class: 'fb-meta' }, el('strong', {}, f.author || 'Supervisor'), ` · ${fbTime(f.created_at)}`),
+    el('div', { class: 'fb-body' }, f.body))));
+}
+function renderOwnerFeedback() {
+  const items = current.feedback || [];
+  const box = $('feedbackBox');
+  box.replaceChildren(store.mode === 'local'
+    ? el('p', { class: 'hint' }, 'Feedback works once the app is connected to Supabase.')
+    : items.length ? feedbackList(items)
+      : el('p', { class: 'hint' }, current.shareToken ? 'No feedback yet. Your supervisor can write feedback at the bottom of the shared page.' : 'Share this case and your supervisor can write feedback on it.'));
+  if (unseenFeedback(current)) { current.feedbackSeenAt = Date.now(); store.save(current); }
+}
+function supervisorFeedbackSection(c) {
+  const listHost = el('div', {}, feedbackList(c.feedback || []));
+  const sec = el('section', { class: 'rp-card', id: 'rp-feedback' }, el('h2', { class: 'rp-h' }, 'Feedback'), listHost);
+  if (!c._token) {
+    sec.append(el('p', { class: 'hint' }, 'Your supervisor sees a box here to type feedback.'));
+    return sec;
+  }
+  if (c.feedbackEnabled === false) return sec;
+  let saved = '';
+  try { saved = localStorage.getItem('asumFeedbackName') || ''; } catch { /* ignore */ }
+  const name = el('input', { placeholder: 'Your name (optional)', autocomplete: 'name' });
+  name.value = saved;
+  const text = el('textarea', { rows: '5', placeholder: 'Write feedback on this scan…' });
+  const btn = el('button', { type: 'button', class: 'primary fb-send', onclick: async () => {
+    const body = text.value.trim();
+    if (!body) { text.focus(); return; }
+    btn.disabled = true; btn.textContent = 'Sending…';
+    try {
+      const f = await store.addFeedback(c._token, name.value.trim(), body);
+      try { localStorage.setItem('asumFeedbackName', name.value.trim()); } catch { /* ignore */ }
+      c.feedback = [...(c.feedback || []), f];
+      listHost.replaceChildren(feedbackList(c.feedback));
+      text.value = '';
+      toast('Feedback sent — thank you');
+    } catch (e) { toast(e.message || 'Could not send feedback', 4000); }
+    finally { btn.disabled = false; btn.textContent = 'Send feedback'; }
+  } }, 'Send feedback');
+  sec.append(el('div', { class: 'fb-form' }, el('div', { class: 'rp-label' }, 'Add feedback'), name, text, btn));
+  return sec;
+}
+
 // Findings that are the normal default; anything else is highlighted on the supervisor page.
 const NORMAL_LINES = new Set(['Pleural line: thin, smooth, sliding present', 'Subpleural: no consolidation',
   'A-lines', 'No effusion', 'Curtain sign present', 'Spine sign']);
@@ -421,7 +473,9 @@ function showView(c, isSupervisor) {
     el('div', { class: 'rp-meta' },
       c.date ? el('span', { class: 'pill' }, `📅 ${formatDate(c.date)}`) : '',
       videos.length ? el('span', { class: 'pill' }, `🎥 ${videos.length} clip${videos.length > 1 ? 's' : ''}`) : '',
-      el('span', { class: `pill ${nAbn ? 'pill-abn' : 'pill-ok'}` }, nAbn ? `${nAbn} abnormal zone${nAbn > 1 ? 's' : ''}` : 'All zones normal'))));
+      el('span', { class: `pill ${nAbn ? 'pill-abn' : 'pill-ok'}` }, nAbn ? `${nAbn} abnormal zone${nAbn > 1 ? 's' : ''}` : 'All zones normal'),
+      store.mode === 'cloud' ? el('button', { type: 'button', class: 'pill pill-btn', onclick: () => $('rp-feedback').scrollIntoView({ behavior: 'smooth', block: 'start' }) },
+        (c.feedback || []).length ? `💬 Feedback (${c.feedback.length})` : '💬 Give feedback') : '')));
 
   // Indication
   const ind = textLines(c.indication);
@@ -479,6 +533,7 @@ function showView(c, isSupervisor) {
       lines.length ? el('ul', { class: 'rp-zone-list' }, lines.map((l) => el('li', { class: NORMAL_LINES.has(l) ? '' : 'hl' }, l))) : ''));
   });
   body.append(findings);
+  if (store.mode === 'cloud') body.append(supervisorFeedbackSection(c));
 }
 
 async function showShared(token) {
@@ -495,6 +550,7 @@ async function showShared(token) {
     return;
   }
   document.title = `Lung US case #${c.number}`;
+  c._token = token;
   showView(c, true);
 }
 

@@ -3,7 +3,7 @@
 //   LocalStore - browser only (localStorage + IndexedDB), used when config.js is blank
 //   CloudStore - Supabase (database + private video bucket + secret share links)
 
-const CASE_FIELDS = ['title', 'date', 'indication', 'patterns', 'patternOther', 'integration', 'zones', 'videos', 'createdAt', 'updatedAt'];
+const CASE_FIELDS = ['title', 'date', 'indication', 'patterns', 'patternOther', 'integration', 'zones', 'videos', 'createdAt', 'updatedAt', 'feedbackSeenAt'];
 const SHARE_DAYS = 90; // how long supervisor video links last before Share needs tapping again
 
 function blankCase(number) {
@@ -87,6 +87,7 @@ class LocalStore {
   async share() { throw new Error('Sharing needs Supabase to be set up (see README).'); }
   async refreshShare() {}
   async getShared() { return null; }
+  async addFeedback() { throw new Error('Feedback needs Supabase to be set up.'); }
 }
 
 // ---------------- Supabase ----------------
@@ -122,6 +123,11 @@ class CloudStore {
     const { data, error } = await this.sb.from('cases').select('id, number, data, share_token').order('number', { ascending: false });
     if (error) throw error;
     this.cases = data.map((r) => this._fromRow(r));
+    // Supervisor feedback (table may not exist yet if 002_feedback.sql hasn't been run).
+    const fb = await this.sb.from('feedback').select('id, case_id, author, body, created_at').order('created_at');
+    const byCase = {};
+    (fb.data || []).forEach((f) => { (byCase[f.case_id] = byCase[f.case_id] || []).push(f); });
+    this.cases.forEach((c) => { c.feedback = byCase[c.id] || []; });
     return this.cases;
   }
   async create() {
@@ -197,7 +203,15 @@ class CloudStore {
     const urls = Object.fromEntries((r.shared_videos || []).map((v) => [v.id, v.url]));
     const c = { ...blankCase(r.number), ...r.data, number: r.number };
     c.videos = (c.videos || []).map((v) => ({ ...v, sharedUrl: urls[v.id] || '' }));
+    const fb = await this.sb.rpc('get_shared_feedback', { token });
+    c.feedback = fb.data || [];
+    c.feedbackEnabled = !fb.error;
     return c;
+  }
+  async addFeedback(token, author, body) {
+    const { data, error } = await this.sb.rpc('add_shared_feedback', { p_token: token, p_author: author, p_body: body });
+    if (error) throw new Error(error.message);
+    return data[0];
   }
 }
 
