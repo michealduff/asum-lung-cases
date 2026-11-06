@@ -850,7 +850,7 @@ $('logbookBtn').addEventListener('click', async () => {
   if (!cases.length) return toast('No cases to export');
   const t = await getLogbookTemplate();
   if (t && t.blob) return exportLogbook(t);
-  toast('Choose the blank ASUM logbook template (.xlsx). It’s remembered on this device.', 5000);
+  toast('Choose the blank ASUM logbook template (.xlsx). It’s saved to your account, so you only do this once.', 5000);
   $('templateInput').click();
 });
 $('changeTemplateBtn').addEventListener('click', () => $('templateInput').click());

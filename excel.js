@@ -1,6 +1,6 @@
 'use strict';
 // Fills the ASUM CCPU logbook template (.xlsx) with one row per case.
-// The template is chosen once and remembered on this device (it isn't uploaded anywhere).
+// The template is chosen once and kept privately with your account (and on the device).
 // Only the first sheet's cells (and one added cell style) are changed; everything else in
 // the file is kept exactly as ASUM supplied it.
 
@@ -38,8 +38,26 @@ async function kv(mode, fn) {
     tx.onerror = () => reject(tx.error);
   });
 }
-const getLogbookTemplate = () => kv('readonly', (s) => s.get('logbookTemplate')).catch(() => null);
-const saveLogbookTemplate = (file) => kv('readwrite', (s) => s.put({ name: file.name, blob: file, savedAt: Date.now() }, 'logbookTemplate'));
+const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const TEMPLATE_FILE = 'logbook-template.xlsx';
+const getLocalTemplate = () => kv('readonly', (s) => s.get('logbookTemplate')).catch(() => null);
+// Signed in: the template is kept privately in your Supabase storage, so every device has it.
+// A copy is also kept on the device as a fallback.
+async function getLogbookTemplate() {
+  if (store.mode === 'cloud' && store.user) {
+    try {
+      const blob = await store.downloadOwnFile(TEMPLATE_FILE);
+      if (blob) return { name: 'ASUM logbook template (saved in your account)', blob, cloud: true };
+    } catch (e) { console.error(e); }
+  }
+  return getLocalTemplate();
+}
+async function saveLogbookTemplate(file) {
+  if (store.mode === 'cloud' && store.user) {
+    await store.uploadOwnFile(TEMPLATE_FILE, new File([file], TEMPLATE_FILE, { type: XLSX_TYPE }));
+  }
+  try { await kv('readwrite', (s) => s.put({ name: file.name, blob: file, savedAt: Date.now() }, 'logbookTemplate')); } catch { /* optional */ }
+}
 
 // ---- what goes in each column ----
 const joinLines = (t) => (t || '').split('\n').map((l) => l.trim()).filter(Boolean);

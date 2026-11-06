@@ -188,6 +188,15 @@ class CloudStore {
     return c;
   }
   hasPendingSaves() { return this.save.pending(); }
+  // Small private files kept with your account (e.g. the ASUM logbook template).
+  async downloadOwnFile(name) {
+    const { data, error } = await this.sb.storage.from('videos').download(`${this.user.id}/settings/${name}`);
+    return error ? null : data;
+  }
+  async uploadOwnFile(name, file) {
+    const { error } = await this.sb.storage.from('videos').upload(`${this.user.id}/settings/${name}`, file, { upsert: true, contentType: file.type });
+    if (error) throw new Error(error.message);
+  }
   // Feedback rows, including the supervisor's Yes/No answers if 004_feedback_ticks.sql has been run.
   async _feedbackQuery(client, filter) {
     const cols = 'id, case_id, author, body, created_at';
