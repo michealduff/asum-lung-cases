@@ -29,3 +29,7 @@ node serve.js 8123
 ```
 
 Then open http://localhost:8123.
+
+## Publishing changes
+
+Run `scripts/stamp-version.sh` before committing so phones pick up the new CSS/JS instead of cached copies, then push to `main`.
