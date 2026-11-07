@@ -548,11 +548,11 @@ function renderZoneCards() {
         el('h2', {}, zone),
         el('button', { type: 'button', onclick: () => setAll(normal) }, 'Normal'),
         el('button', { type: 'button', class: 'ghost', onclick: () => { notes.value = ''; setAll(clear); } }, 'Clear')),
-      ...body, notes,
       el('div', { class: 'zone-media-block' },
-        el('label', { class: 'upload-btn' }, input, el('span', { class: 'add-media' }, `+ Clip or photo for ${zone}`)),
+        el('div', { class: 'zone-media', id: `zm-${zone}` }),
         prog,
-        el('div', { class: 'zone-media', id: `zm-${zone}` }))));
+        el('label', { class: 'upload-btn' }, input, el('span', { class: 'add-media' }, `+ Add clip or photo for ${zone}`))),
+      ...body, notes));
     renderZoneMedia(zone);
   });
 }
@@ -820,9 +820,9 @@ function showView(c, isSupervisor) {
         el('span', { class: 'rp-zone-name' }, z),
         el('span', { class: 'rp-zone-status' }, { normal: 'Normal', abnormal: 'Abnormal', partial: 'Partly documented', empty: 'Not documented' }[st]),
         clip),
-      lines.length ? el('ul', { class: 'rp-zone-list' }, lines.map((l) => el('li', { class: NORMAL_LINES.has(l) ? '' : 'hl' }, l))) : '',
       zoneMediaOf(c, z).length ? el('div', { class: 'rp-zone-media' },
-        zoneMediaOf(c, z).map((m, i, arr) => mediaFigure(m, `${z}${arr.length > 1 ? ` (${i + 1})` : ''}`))) : ''));
+        zoneMediaOf(c, z).map((m, i, arr) => mediaFigure(m, `${z}${arr.length > 1 ? ` (${i + 1})` : ''}`))) : '',
+      lines.length ? el('ul', { class: 'rp-zone-list' }, lines.map((l) => el('li', { class: NORMAL_LINES.has(l) ? '' : 'hl' }, l))) : ''));
   });
   body.append(findings);
 

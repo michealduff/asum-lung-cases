@@ -254,3 +254,8 @@ button.small { min-height: 32px; padding: 4px 10px; font-size: 13px; }
 .rp-zone-media { margin-top: 8px; display: grid; gap: 10px; }
 .rp-zone-media figure { margin: 0; }
 .removed-note { margin: 0 0 8px; }
+.zone-card .zone-media-block { margin: 8px 0 4px; }
+.zone-card .zone-media:empty { display: none; }
+.zone-card .zone-media:not(:empty) + .progress[hidden] + .upload-btn .add-media { margin-top: 10px; }
+.zone-card .zone-media { margin: 0; }
+.rp-zone-media { margin: 8px 0 4px; }
