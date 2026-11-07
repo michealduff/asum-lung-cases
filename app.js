@@ -529,7 +529,19 @@ function renderZoneCards() {
     const notes = el('input', { placeholder: 'Other findings / notes' });
     notes.value = current.zones[zone].notes || '';
     notes.addEventListener('input', () => { current.zones[zone].notes = notes.value; touch(); });
-    const setAll = (vals) => { Object.assign(current.zones[zone], structuredClone(vals)); groups.forEach((g) => g.redraw()); touch(); };
+    const setAll = (vals) => {
+      Object.assign(current.zones[zone], structuredClone(vals), { notDone: false });
+      groups.forEach((g) => g.redraw()); syncNotDone(); touch();
+    };
+    const notDoneBtn = el('button', { type: 'button', class: 'ghost notdone-btn', onclick: () => {
+      current.zones[zone].notDone = !current.zones[zone].notDone; syncNotDone(); touch();
+    } }, 'Not done');
+    let cardEl;
+    const syncNotDone = () => {
+      const on = !!current.zones[zone].notDone;
+      notDoneBtn.classList.toggle('on', on);
+      if (cardEl) cardEl.classList.toggle('is-notdone', on);
+    };
     const normal = PLAPS_ZONES.includes(zone) ? NORMAL_PLAPS : NORMAL_LUNG;
     const clear = { ...Object.fromEntries(fieldsFor(zone).map((f) => [f.key, f.type === 'multi' ? [] : ''])), notes: '' };
 
@@ -541,16 +553,20 @@ function renderZoneCards() {
       uploadMedia(files, { zone, progressBox: prog, onDone: () => { renderZoneMedia(zone); renderZoneMap(); } });
     });
 
-    host.append(el('div', { class: 'card zone-card', id: `zone-${zone}` },
+    cardEl = el('div', { class: 'card zone-card', id: `zone-${zone}` },
       el('div', { class: 'zone-head' },
         el('h2', {}, zone),
         el('button', { type: 'button', onclick: () => setAll(normal) }, 'Normal'),
+        notDoneBtn,
         el('button', { type: 'button', class: 'ghost', onclick: () => { notes.value = ''; setAll(clear); } }, 'Clear')),
+      el('p', { class: 'notdone-note' }, `${zone} marked as not done. Tap “Not done” again to fill it in.`),
       el('div', { class: 'zone-media-block' },
         el('div', { class: 'zone-media', id: `zm-${zone}` }),
         prog,
         el('label', { class: 'upload-btn' }, input, el('span', { class: 'add-media' }, `+ Add clip or photo for ${zone}`))),
-      ...body, notes));
+      ...body, notes);
+    host.append(cardEl);
+    syncNotDone();
     renderZoneMedia(zone);
   });
 }
@@ -801,18 +817,18 @@ function showView(c, isSupervisor) {
     chestDiagram((z) => zoneStatus(z, zones[z] || {}), (z) => zoneMediaOf(c, z).length > 0,
       (z) => $(`vz-${z}`).scrollIntoView({ behavior: 'smooth', block: 'start' })),
     el('p', { class: 'chest-caption' }, 'Patient’s right on the left · 1–2 anterior, 3–4 lateral, PLAPS posterolateral base · tap a zone'),
-    el('p', { class: 'legend' }, el('span', { class: 'dot normal' }), 'Normal ', el('span', { class: 'dot abnormal' }), 'Abnormal ', el('span', { class: 'dot empty' }), 'Not documented'),
+    el('p', { class: 'legend' }, el('span', { class: 'dot normal' }), 'Normal ', el('span', { class: 'dot abnormal' }), 'Abnormal ', el('span', { class: 'dot empty' }), 'Not documented ', el('span', { class: 'dot notdone' }), 'Not done'),
     removedNote(c));
   ZONE_ORDER.forEach((z) => {
     const d = zones[z] || {};
     const st = zoneStatus(z, d);
-    const lines = st === 'empty' ? [] : zoneLines(z, d);
+    const lines = st === 'empty' || st === 'notdone' ? [] : zoneLines(z, d);
     const clip = videoZones.has(z) ? el('button', { type: 'button', class: 'clip-link',
       onclick: () => playClipHere(z) }, '▶ clip') : '';
     findings.append(el('div', { class: `rp-zone z-${st}`, id: `vz-${z}` },
       el('div', { class: 'rp-zone-head' },
         el('span', { class: 'rp-zone-name' }, z),
-        el('span', { class: 'rp-zone-status' }, { normal: 'Normal', abnormal: 'Abnormal', partial: 'Partly documented', empty: 'Not documented' }[st]),
+        el('span', { class: 'rp-zone-status' }, { normal: 'Normal', abnormal: 'Abnormal', partial: 'Partly documented', empty: 'Not documented', notdone: 'Not done' }[st]),
         clip),
       zoneMediaOf(c, z).length ? el('div', { class: 'rp-zone-media' },
         zoneMediaOf(c, z).map((m, i, arr) => mediaFigure(m, `${z}${arr.length > 1 ? ` (${i + 1})` : ''}`))) : '',

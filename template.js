@@ -44,6 +44,7 @@ const fieldsFor = (zone) => (PLAPS_ZONES.includes(zone) ? PLAPS_FIELDS : LUNG_FI
 
 // ---------- Zone assessment ----------
 function zoneStatus(zone, d) {
+  if (d.notDone) return 'notdone';
   const fields = fieldsFor(zone);
   const filled = fields.filter((f) => (f.type === 'multi' ? (d[f.key] || []).length : d[f.key])).length;
   if (!filled && !d.notes) return 'empty';
@@ -85,12 +86,13 @@ function suggestPatterns(c) {
   if (ptx) out.push('Pneumothorax pattern');
 
   const statuses = ZONE_ORDER.map((k) => zoneStatus(k, z[k]));
-  if (!out.length && statuses.every((s) => s === 'normal')) out.push('Normal');
+  if (!out.length && statuses.some((s) => s === 'normal') && statuses.every((s) => s === 'normal' || s === 'notdone')) out.push('Normal');
   return out;
 }
 
 // ---------- Report text ----------
 function zoneLines(zone, d) {
+  if (d.notDone) return ['Not done'];
   const lines = [];
   if (PLAPS_ZONES.includes(zone)) {
     if (d.effusion) {

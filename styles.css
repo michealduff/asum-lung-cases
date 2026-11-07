@@ -282,3 +282,16 @@ button.small { min-height: 32px; padding: 4px 10px; font-size: 13px; }
 .chest-badge { fill: var(--accent); stroke: var(--card); stroke-width: 2; }
 .chest-badge-icon { font: 700 9px -apple-system, sans-serif; fill: #fff; pointer-events: none; }
 #zoneMap.zone-map { display: block; }
+
+/* 'Not done' zones */
+.notdone-btn.on { background: var(--text); color: var(--card); border-color: var(--text); }
+.notdone-note { display: none; margin: 6px 0 0; font-size: 14px; color: var(--muted); font-style: italic; }
+.zone-card.is-notdone .notdone-note { display: block; }
+.zone-card.is-notdone .field, .zone-card.is-notdone > input, .zone-card.is-notdone .zone-media-block { display: none; }
+.zone-card.is-notdone { opacity: .75; }
+.dot.notdone { background: transparent; border: 2px dashed var(--muted); width: 8px; height: 8px; }
+.chest-zone.s-notdone rect { fill: none; stroke: var(--muted); stroke-dasharray: 3 4; }
+.chest-zone.s-notdone .chest-label { fill: var(--muted); font-weight: 600; }
+.rp-zone.z-notdone { border-left-color: var(--empty); }
+.rp-zone.z-notdone .rp-zone-status { font-style: italic; }
+.zone-btn.s-notdone { border-style: dashed; color: var(--muted); }
