@@ -259,3 +259,4 @@ button.small { min-height: 32px; padding: 4px 10px; font-size: 13px; }
 .zone-card .zone-media:not(:empty) + .progress[hidden] + .upload-btn .add-media { margin-top: 10px; }
 .zone-card .zone-media { margin: 0; }
 .rp-zone-media { margin: 8px 0 4px; }
+.rp-trainee { border-left-color: var(--partial); background: color-mix(in srgb, var(--partial) 12%, var(--card)); }

@@ -262,6 +262,7 @@ function openCase(id) {
   $('f-patternOther').value = current.patternOther || '';
   $('f-integration').value = current.integration || '';
   $('f-imagingNotes').value = current.imaging.notes || '';
+  $('f-traineeComments').value = current.traineeComments || '';
   renderShare();
   renderOwnerFeedback();
   renderVideos();
@@ -597,7 +598,7 @@ function refreshDerived() {
 
 $('f-imagingNotes').addEventListener('input', (e) => { current.imaging.notes = e.target.value; touch(); });
 
-[['f-title', 'title'], ['f-date', 'date'], ['f-indication', 'indication'],
+[['f-traineeComments', 'traineeComments'], ['f-title', 'title'], ['f-date', 'date'], ['f-indication', 'indication'],
   ['f-patternOther', 'patternOther'], ['f-integration', 'integration']].forEach(([id, key]) => {
   $(id).addEventListener('input', (e) => { current[key] = e.target.value; touch(); });
 });
@@ -842,6 +843,12 @@ function showView(c, isSupervisor) {
         el('figcaption', {}, meta.caption || meta.name, el('span', { class: 'rp-zoom' }, ' · tap to enlarge')));
     });
     body.append(sec);
+  }
+
+  // Trainee's comments for the supervisor (just before Feedback)
+  const tc = textLines(c.traineeComments);
+  if (tc.length) {
+    body.append(section('Comments for supervisor', el('blockquote', { class: 'rp-quote rp-trainee' }, tc.map((l) => el('p', {}, l)))));
   }
 
   if (store.mode === 'cloud') body.append(supervisorFeedbackSection(c));

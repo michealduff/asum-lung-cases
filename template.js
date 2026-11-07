@@ -139,6 +139,8 @@ function buildReport(c) {
     out.push(...imNotes);
     if (imgs.length) out.push(`\t•\tImages: ${imgs.map((i) => i.caption || i.name).join(', ')}`);
   }
+  const tc = bullets(c.traineeComments || '');
+  if (tc.length) out.push('', '', 'COMMENTS FOR SUPERVISOR', ...tc);
   return out.join('\n') + '\n';
 }
 

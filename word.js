@@ -65,6 +65,11 @@ function caseParagraphs(D, c, { pageBreak }, images) {
       if (meta.caption) out.push(new Paragraph({ children: [new TextRun({ text: meta.caption, italics: true })] }));
     });
   }
+  const tc = lines(c.traineeComments);
+  if (tc.length) {
+    out.push(new Paragraph({ heading: HeadingLevel.HEADING_2, text: 'Comments for supervisor' }));
+    tc.forEach((l) => out.push(new Paragraph({ text: l })));
+  }
   return out;
 }
 
