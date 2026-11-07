@@ -205,7 +205,7 @@ async function freeSpaceFor(bytes, keepCase) {
   let used = storageUsed();
   if (used + bytes <= budget) return [];
   const candidates = cases.filter((c) => c.id !== keepCase.id)
-    .flatMap((c) => (c.videos || []).map((v) => ({ c, v })))
+    .flatMap((c) => (c.videos || []).filter((v) => !isImageMeta(v)).map((v) => ({ c, v })))
     .sort((a, b) => uploadedAt(a.v) - uploadedAt(b.v));
   const removed = [];
   for (const { c, v } of candidates) {
@@ -312,82 +312,118 @@ async function renderVideos() {
   const host = $('videoList');
   host.innerHTML = '';
   if ((current.removedVideos || []).length) host.append(removedNote(current));
-  for (const meta of current.videos) {
-    const label = el('input', { placeholder: 'Label, e.g. R4 or R-PLAPS' });
+  for (const meta of current.videos.filter((v) => !v.zone)) {
+    const label = el('input', { placeholder: 'Label, e.g. whole scan, or a zone like R4' });
     label.value = meta.label || '';
     label.addEventListener('input', () => { meta.label = label.value; touch(); });
     host.append(el('div', { class: 'video-item' },
       await videoEl(meta),
       el('div', { class: 'row' }, label,
-        el('button', { type: 'button', class: 'danger', onclick: async () => {
-          if (!confirm('Remove this video?')) return;
-          try {
-            await store.removeVideo(current, meta);
-            current.videos = current.videos.filter((v) => v.id !== meta.id);
-            touch();
-            await store.refreshShare(current);
-            renderVideos();
-          } catch (e) { toast(e.message || 'Could not remove video'); }
-        } }, 'Remove')),
+        el('button', { type: 'button', class: 'danger', onclick: () => removeMedia(meta, renderVideos) }, 'Remove')),
       el('div', { class: 'meta' }, `${meta.name} · ${mb(meta.size)}`)));
   }
 }
 
-function setProgress(label, frac) {
-  const box = $('uploadProgress');
+const progressIn = (box) => (label, frac) => {
+  if (!box) return;
   box.hidden = frac == null;
   if (frac == null) return;
   box.querySelector('.bar').style.width = `${Math.round(frac * 100)}%`;
   box.querySelector('span').textContent = `${label} ${Math.round(frac * 100)}%`;
-}
+};
+const isImageFile = (f) => (f.type || '').startsWith('image/') || /\.(heic|heif|jpe?g|png|gif|webp)$/i.test(f.name);
+const isImageMeta = (m) => (m.type || '').startsWith('image/');
+const zoneMediaOf = (c, zone) => (c.videos || []).filter((v) => v.zone === zone);
 
+// Uploads clips and/or photos to the open case — for a zone (R1, L-PLAPS…) or the whole scan.
 let uploading = false;
-$('videoInput').addEventListener('change', async (e) => {
-  const files = [...e.target.files];
-  e.target.value = '';
-  if (!files.length || uploading) return;
+async function uploadMedia(files, { zone = null, progressBox, statusEl, onDone }) {
+  if (!files.length) return;
+  if (uploading) { toast('Another upload is still in progress — try again when it finishes'); return; }
   uploading = true;
   const caseRef = current;
+  const setP = progressIn(progressBox);
   const lock = await keepAwake();
-  const status = $('uploadStatus');
-  status.textContent = 'Keep this screen open until the upload finishes.';
+  if (statusEl) statusEl.textContent = 'Keep this screen open until the upload finishes.';
   for (const [i, f] of files.entries()) {
     const of = files.length > 1 ? ` (${i + 1} of ${files.length})` : '';
-    let toUpload = f;
-    try {
-      setProgress(`Shrinking clip${of}…`, 0);
-      toUpload = await shrinkVideo(f, (p) => setProgress(`Shrinking clip${of}…`, p));
-    } catch (err) {
-      console.error(err);
-      if (f.size > MAX_UPLOAD_BYTES) {
-        setProgress(null);
-        toast(`Couldn't shrink ${f.name} on this device, and it's ${mb(f.size)} (limit 50 MB). Try trimming it in Photos.`, 7000);
-        continue;
+    let up = f;
+    const extra = {};
+    if (isImageFile(f)) {
+      try { const r = await shrinkImage(f); up = r.file; extra.width = r.width; extra.height = r.height; } catch (err) {
+        console.error(err);
+        if (f.size > 15 * 1048576) { toast(`Couldn't process ${f.name}`, 5000); continue; }
       }
-      toast('Couldn’t shrink this clip — uploading the original instead', 4000);
+    } else {
+      try {
+        setP(`Shrinking clip${of}…`, 0);
+        up = await shrinkVideo(f, (p) => setP(`Shrinking clip${of}…`, p));
+      } catch (err) {
+        console.error(err);
+        if (f.size > MAX_UPLOAD_BYTES) {
+          setP(null);
+          toast(`Couldn't shrink ${f.name} on this device, and it's ${mb(f.size)} (limit 50 MB). Try trimming it in Photos.`, 7000);
+          continue;
+        }
+        toast('Couldn’t shrink this clip — uploading the original instead', 4000);
+      }
     }
-    if (toUpload.size > MAX_UPLOAD_BYTES) {
-      setProgress(null);
-      toast(`${f.name} is still ${mb(toUpload.size)} after shrinking (limit 50 MB). Try trimming it in Photos.`, 7000);
+    if (up.size > MAX_UPLOAD_BYTES) {
+      setP(null);
+      toast(`${f.name} is still ${mb(up.size)} after shrinking (limit 50 MB). Try trimming it in Photos.`, 7000);
       continue;
     }
     try {
-      await freeSpaceFor(toUpload.size, caseRef);
-      setProgress(`Uploading${of}…`, 0);
-      const meta = await store.addVideo(caseRef, toUpload, (p) => setProgress(`Uploading${of}…`, p));
-      meta.name = f.name;
-      meta.originalSize = f.size;
+      await freeSpaceFor(up.size, caseRef);
+      setP(`Uploading${of}…`, 0);
+      const meta = await store.addVideo(caseRef, up, (p) => setP(`Uploading${of}…`, p));
+      Object.assign(meta, { name: f.name, originalSize: f.size, zone, label: zone || '' }, extra);
       caseRef.videos.push(meta);
       if (current === caseRef) touch(); else store.save(caseRef);
     } catch (err) { toast(`Could not upload ${f.name}: ${err.message || err}`, 6000); }
   }
-  setProgress(null);
-  status.textContent = '';
+  setP(null);
+  if (statusEl) statusEl.textContent = '';
   try { await store.refreshShare(caseRef); } catch (err) { console.error(err); }
   if (lock) lock.release().catch(() => {});
   uploading = false;
-  if (current === caseRef) renderVideos();
+  if (current === caseRef && onDone) onDone();
+}
+
+$('videoInput').addEventListener('change', (e) => {
+  const files = [...e.target.files];
+  e.target.value = '';
+  uploadMedia(files, { progressBox: $('uploadProgress'), statusEl: $('uploadStatus'), onDone: renderVideos });
 });
+
+async function removeMedia(meta, after) {
+  if (!confirm(isImageMeta(meta) ? 'Remove this photo?' : 'Remove this clip?')) return;
+  try {
+    await store.removeVideo(current, meta);
+    current.videos = current.videos.filter((v) => v.id !== meta.id);
+    touch();
+    await store.refreshShare(current);
+    after();
+  } catch (e) { toast(e.message || 'Could not remove it'); }
+}
+
+async function mediaEl(meta) {
+  if (!isImageMeta(meta)) return videoEl(meta);
+  return el('img', { src: await mediaSrc(meta), alt: meta.label || meta.name });
+}
+
+async function renderZoneMedia(zone) {
+  const host = $(`zm-${zone}`);
+  if (!host || !current) return;
+  host.innerHTML = '';
+  for (const meta of zoneMediaOf(current, zone)) {
+    host.append(el('div', { class: 'zm-item' },
+      await mediaEl(meta),
+      el('div', { class: 'row' },
+        el('span', { class: 'meta' }, `${isImageMeta(meta) ? 'Photo' : 'Clip'} · ${mb(meta.size)}`),
+        el('button', { type: 'button', class: 'danger small', onclick: () => removeMedia(meta, () => { renderZoneMedia(zone); renderZoneMap(); }) }, 'Remove'))));
+  }
+}
 
 async function mediaSrc(meta) {
   try {
@@ -499,12 +535,25 @@ function renderZoneCards() {
     const normal = PLAPS_ZONES.includes(zone) ? NORMAL_PLAPS : NORMAL_LUNG;
     const clear = { ...Object.fromEntries(fieldsFor(zone).map((f) => [f.key, f.type === 'multi' ? [] : ''])), notes: '' };
 
+    const prog = el('div', { class: 'progress', hidden: '' }, el('div', { class: 'bar' }), el('span'));
+    const input = el('input', { type: 'file', accept: 'video/*,image/*', multiple: '' });
+    input.addEventListener('change', (e) => {
+      const files = [...e.target.files];
+      e.target.value = '';
+      uploadMedia(files, { zone, progressBox: prog, onDone: () => { renderZoneMedia(zone); renderZoneMap(); } });
+    });
+
     host.append(el('div', { class: 'card zone-card', id: `zone-${zone}` },
       el('div', { class: 'zone-head' },
         el('h2', {}, zone),
         el('button', { type: 'button', onclick: () => setAll(normal) }, 'Normal'),
         el('button', { type: 'button', class: 'ghost', onclick: () => { notes.value = ''; setAll(clear); } }, 'Clear')),
-      ...body, notes));
+      ...body, notes,
+      el('div', { class: 'zone-media-block' },
+        el('label', { class: 'upload-btn' }, input, el('span', { class: 'add-media' }, `+ Clip or photo for ${zone}`)),
+        prog,
+        el('div', { class: 'zone-media', id: `zm-${zone}` }))));
+    renderZoneMedia(zone);
   });
 }
 
@@ -516,7 +565,7 @@ function renderZoneMap() {
       el('h4', {}, side),
       el('div', { class: 'zone-grid' }, zones.map((z) => el('button', {
         type: 'button',
-        class: `zone-btn s-${zoneStatus(z, current.zones[z])}${z.includes('PLAPS') ? ' plaps' : ''}`,
+        class: `zone-btn s-${zoneStatus(z, current.zones[z])}${z.includes('PLAPS') ? ' plaps' : ''}${zoneMediaOf(current, z).length ? ' has-media' : ''}`,
         onclick: () => $(`zone-${z}`).scrollIntoView({ behavior: 'smooth', block: 'start' }),
       }, z)))));
   });
@@ -690,7 +739,8 @@ function showView(c, isSupervisor) {
   const body = $('viewBody');
   body.innerHTML = '';
   const zones = c.zones || {};
-  const videos = c.videos || [];
+  const allMedia = c.videos || [];
+  const videos = allMedia.filter((v) => !v.zone);
   const videoZones = new Set(videos.map((v) => zoneKey(v.label)).filter((k) => ZONE_ORDER.includes(k)));
   const section = (title, ...kids) => el('section', { class: 'rp-card' }, el('h2', { class: 'rp-h' }, title), ...kids);
 
@@ -703,7 +753,10 @@ function showView(c, isSupervisor) {
     c.title ? el('div', { class: 'rp-sub' }, c.title) : '',
     el('div', { class: 'rp-meta' },
       c.date ? el('span', { class: 'pill' }, `📅 ${formatDate(c.date)}`) : '',
-      videos.length ? el('span', { class: 'pill' }, `🎥 ${videos.length} clip${videos.length > 1 ? 's' : ''}`) : '',
+      allMedia.length ? el('span', { class: 'pill' }, (() => {
+        const nImg = allMedia.filter(isImageMeta).length; const nVid = allMedia.length - nImg;
+        return [nVid ? `🎥 ${nVid} clip${nVid > 1 ? 's' : ''}` : '', nImg ? `📷 ${nImg} photo${nImg > 1 ? 's' : ''}` : ''].filter(Boolean).join(' · ');
+      })()) : '',
       el('span', { class: `pill ${nAbn ? 'pill-abn' : 'pill-ok'}` }, nAbn ? `${nAbn} abnormal zone${nAbn > 1 ? 's' : ''}` : 'All zones normal'),
       store.mode === 'cloud' ? el('button', { type: 'button', class: 'pill pill-btn', onclick: () => $('rp-feedback').scrollIntoView({ behavior: 'smooth', block: 'start' }) },
         (c.feedback || []).length ? `💬 Feedback (${c.feedback.length})` : '💬 Give feedback') : '')));
@@ -723,28 +776,34 @@ function showView(c, isSupervisor) {
     integ.length ? el('blockquote', { class: 'rp-quote' }, integ.map((l) => el('p', {}, l)))
       : el('p', { class: 'rp-empty' }, 'Not yet recorded')));
 
-  // Videos
+  // A clip (pins to the top while playing and scrolled past) or a photo (tap to enlarge).
+  const mediaFigure = (meta, label, id) => {
+    if (isImageMeta(meta)) {
+      const fig = el('figure', { class: 'rp-image' });
+      mediaSrc(meta).then((src) => fig.append(
+        el('a', { href: src, target: '_blank', rel: 'noopener' }, el('img', { src, alt: label })),
+        el('figcaption', {}, label, el('span', { class: 'rp-zoom' }, ' · tap to enlarge'))));
+      return fig;
+    }
+    const wrap = el('div', { class: 'vwrap' },
+      el('span', { class: 'dock-label' }, label),
+      el('button', { type: 'button', class: 'dock-close', 'aria-label': 'Close mini player', onclick: () => { wrap.querySelector('video').pause(); undock(); } }, '×'));
+    const fig = el('figure', { class: 'rp-video', ...(id ? { id } : {}) }, wrap, el('figcaption', {}, label));
+    videoEl(meta).then((video) => { video.loop = true; wrap.prepend(video); watchClip(fig, video); });
+    return fig;
+  };
+
+  // Whole-scan clips (not attached to a zone)
   if (videos.length || (c.removedVideos || []).length) {
     const vs = section('Scan clips', removedNote(c));
-    videos.forEach(async (meta) => {
-      const label = meta.label || meta.name;
-      const wrap = el('div', { class: 'vwrap' },
-        el('span', { class: 'dock-label' }, label),
-        el('button', { type: 'button', class: 'dock-close', 'aria-label': 'Close mini player', onclick: () => { wrap.querySelector('video').pause(); undock(); } }, '×'));
-      const fig = el('figure', { class: 'rp-video', id: `clip-${zoneKey(meta.label)}` }, wrap, el('figcaption', {}, label));
-      vs.append(fig);
-      const video = await videoEl(meta);
-      video.loop = true;
-      wrap.prepend(video);
-      watchClip(fig, video);
-    });
+    videos.forEach((meta) => vs.append(mediaFigure(meta, meta.label || meta.name, `clip-${zoneKey(meta.label)}`)));
     body.append(vs);
   }
 
   // Zone map + findings
   const mapSide = (side, list) => el('div', { class: 'zone-side' }, el('h4', {}, side),
     el('div', { class: 'zone-grid' }, list.map((z) => el('button', {
-      type: 'button', class: `zone-btn s-${zoneStatus(z, zones[z] || {})}${z.includes('PLAPS') ? ' plaps' : ''}`,
+      type: 'button', class: `zone-btn s-${zoneStatus(z, zones[z] || {})}${z.includes('PLAPS') ? ' plaps' : ''}${zoneMediaOf(c, z).length ? ' has-media' : ''}`,
       onclick: () => $(`vz-${z}`).scrollIntoView({ behavior: 'smooth', block: 'start' }),
     }, z))));
   const findings = section('Findings by zone',
@@ -761,7 +820,9 @@ function showView(c, isSupervisor) {
         el('span', { class: 'rp-zone-name' }, z),
         el('span', { class: 'rp-zone-status' }, { normal: 'Normal', abnormal: 'Abnormal', partial: 'Partly documented', empty: 'Not documented' }[st]),
         clip),
-      lines.length ? el('ul', { class: 'rp-zone-list' }, lines.map((l) => el('li', { class: NORMAL_LINES.has(l) ? '' : 'hl' }, l))) : ''));
+      lines.length ? el('ul', { class: 'rp-zone-list' }, lines.map((l) => el('li', { class: NORMAL_LINES.has(l) ? '' : 'hl' }, l))) : '',
+      zoneMediaOf(c, z).length ? el('div', { class: 'rp-zone-media' },
+        zoneMediaOf(c, z).map((m, i, arr) => mediaFigure(m, `${z}${arr.length > 1 ? ` (${i + 1})` : ''}`))) : ''));
   });
   body.append(findings);
 
