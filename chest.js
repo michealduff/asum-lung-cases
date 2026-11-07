@@ -35,10 +35,6 @@ function chestDiagram(statusOf, hasMedia, onPick) {
       svgEl('rect', { x, y, width: w, height: h, rx: 10, class: z.includes('PLAPS') ? 'plaps' : '' }),
       svgEl('text', { x: x + w / 2, y: y + h / 2 + 5, 'text-anchor': 'middle', class: 'chest-label' }, z),
     );
-    if (hasMedia(z)) {
-      g.append(svgEl('circle', { cx: x + w - 4, cy: y + 4, r: 9, class: 'chest-badge' }),
-        svgEl('text', { x: x + w - 4, y: y + 7.5, 'text-anchor': 'middle', class: 'chest-badge-icon' }, '▶'));
-    }
     g.addEventListener('click', () => onPick(z));
     g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(z); } });
     svg.append(g);

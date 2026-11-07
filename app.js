@@ -559,7 +559,7 @@ function renderZoneMap() {
   $('zoneMap').replaceChildren(
     chestDiagram((z) => zoneStatus(z, current.zones[z] || {}), (z) => zoneMediaOf(current, z).length > 0,
       (z) => $(`zone-${z}`).scrollIntoView({ behavior: 'smooth', block: 'start' })),
-    el('p', { class: 'chest-caption' }, 'Tap a zone to jump to it · ▶ = has a clip or photo'));
+    el('p', { class: 'chest-caption' }, 'Tap a zone to jump to it'));
 }
 
 function renderPatternChips() {
