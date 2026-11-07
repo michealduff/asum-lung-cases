@@ -312,8 +312,10 @@ const removedNote = (c) => ((c.removedVideos || []).length
 async function renderVideos() {
   const host = $('videoList');
   host.innerHTML = '';
-  if ((current.removedVideos || []).length) host.append(removedNote(current));
-  for (const meta of current.videos.filter((v) => !v.zone)) {
+  $('removedNoteBox').replaceChildren(removedNote(current));
+  const others = current.videos.filter((v) => !v.zone);
+  $('otherClipsCard').hidden = !others.length;
+  for (const meta of others) {
     const label = el('input', { placeholder: 'Label, e.g. whole scan, or a zone like R4' });
     label.value = meta.label || '';
     label.addEventListener('input', () => { meta.label = label.value; touch(); });
@@ -391,11 +393,6 @@ async function uploadMedia(files, { zone = null, progressBox, statusEl, onDone }
   if (current === caseRef && onDone) onDone();
 }
 
-$('videoInput').addEventListener('change', (e) => {
-  const files = [...e.target.files];
-  e.target.value = '';
-  uploadMedia(files, { progressBox: $('uploadProgress'), statusEl: $('uploadStatus'), onDone: renderVideos });
-});
 
 async function removeMedia(meta, after) {
   if (!confirm(isImageMeta(meta) ? 'Remove this photo?' : 'Remove this clip?')) return;
@@ -795,8 +792,8 @@ function showView(c, isSupervisor) {
   };
 
   // Whole-scan clips (not attached to a zone)
-  if (videos.length || (c.removedVideos || []).length) {
-    const vs = section('Scan clips', removedNote(c));
+  if (videos.length) {
+    const vs = section('Other clips');
     videos.forEach((meta) => vs.append(mediaFigure(meta, meta.label || meta.name, `clip-${zoneKey(meta.label)}`)));
     body.append(vs);
   }
@@ -809,7 +806,8 @@ function showView(c, isSupervisor) {
     }, z))));
   const findings = section('Findings by zone',
     el('div', { class: 'zone-map' }, mapSide('Right', ['R1', 'R2', 'R3', 'R4', 'R-PLAPS']), mapSide('Left', ['L1', 'L2', 'L3', 'L4', 'L-PLAPS'])),
-    el('p', { class: 'legend' }, el('span', { class: 'dot normal' }), 'Normal ', el('span', { class: 'dot abnormal' }), 'Abnormal ', el('span', { class: 'dot empty' }), 'Not documented'));
+    el('p', { class: 'legend' }, el('span', { class: 'dot normal' }), 'Normal ', el('span', { class: 'dot abnormal' }), 'Abnormal ', el('span', { class: 'dot empty' }), 'Not documented'),
+    removedNote(c));
   ZONE_ORDER.forEach((z) => {
     const d = zones[z] || {};
     const st = zoneStatus(z, d);

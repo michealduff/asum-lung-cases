@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex, nofollow">
   <meta name="referrer" content="no-referrer">
   <title>ASUM Lung Cases</title>
-  <link rel="stylesheet" href="styles.css?v=20261107180111">
+  <link rel="stylesheet" href="styles.css?v=20261107180649">
 </head>
 <body>
   <header class="topbar">
@@ -65,15 +65,10 @@
           <div id="shareBox"></div>
         </div>
 
-        <div class="card">
-          <h2>Scan videos</h2>
-          <p class="hint">Clips are shrunk on your phone before uploading (long clips are fine). Check that no patient name or MRN is visible on the machine screen.</p>
-          <label class="upload-btn">
-            <input id="videoInput" type="file" accept="video/*" multiple>
-            <span class="primary-like">+ Add video</span>
-          </label>
-          <span id="uploadStatus" class="hint"></span>
-          <div id="uploadProgress" class="progress" hidden><div class="bar"></div><span></span></div>
+        <!-- Only shown for older cases that have clips not attached to a zone -->
+        <div class="card" id="otherClipsCard" hidden>
+          <h2>Other clips</h2>
+          <p class="hint">Clips added before zone uploads existed. New clips go in each zone below.</p>
           <div id="videoList" class="video-list"></div>
         </div>
 
@@ -84,7 +79,9 @@
 
         <div class="card">
           <h2>Zones</h2>
+          <p class="hint">Add clips and photos in each zone below. They’re shrunk on your phone before uploading (long clips are fine). Check no patient name or MRN is visible on screen.</p>
           <div id="zoneMap" class="zone-map"></div>
+          <div id="removedNoteBox"></div>
           <p class="legend"><span class="dot normal"></span>Normal <span class="dot abnormal"></span>Abnormal <span class="dot partial"></span>Partly filled <span class="dot empty"></span>Not filled</p>
         </div>
 
@@ -148,12 +145,12 @@
 
   <div id="toast" class="toast" hidden></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
-  <script src="config.js?v=20261107180111"></script>
-  <script src="template.js?v=20261107180111"></script>
-  <script src="store.js?v=20261107180111"></script>
-  <script src="compress.js?v=20261107180111"></script>
-  <script src="excel.js?v=20261107180111"></script>
-  <script src="word.js?v=20261107180111"></script>
-  <script src="app.js?v=20261107180111"></script>
+  <script src="config.js?v=20261107180649"></script>
+  <script src="template.js?v=20261107180649"></script>
+  <script src="store.js?v=20261107180649"></script>
+  <script src="compress.js?v=20261107180649"></script>
+  <script src="excel.js?v=20261107180649"></script>
+  <script src="word.js?v=20261107180649"></script>
+  <script src="app.js?v=20261107180649"></script>
 </body>
 </html>
