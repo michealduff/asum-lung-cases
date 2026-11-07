@@ -260,3 +260,24 @@ button.small { min-height: 32px; padding: 4px 10px; font-size: 13px; }
 .zone-card .zone-media { margin: 0; }
 .rp-zone-media { margin: 8px 0 4px; }
 .rp-trainee { border-left-color: var(--partial); background: color-mix(in srgb, var(--partial) 12%, var(--card)); }
+
+/* Chest diagram */
+.chest { width: 100%; max-width: 420px; display: block; margin: 0 auto; }
+.chest-body { fill: color-mix(in srgb, var(--text) 5%, var(--card)); stroke: color-mix(in srgb, var(--text) 35%, transparent); stroke-width: 2; }
+.chest-line { fill: none; stroke: color-mix(in srgb, var(--text) 30%, transparent); stroke-width: 2; stroke-linecap: round; }
+.chest-line.faint { stroke: color-mix(in srgb, var(--text) 15%, transparent); stroke-dasharray: 4 5; }
+.chest-side { font: 700 15px -apple-system, sans-serif; fill: var(--muted); }
+.chest-zone { cursor: pointer; }
+.chest-zone rect { stroke-width: 2.5; fill-opacity: .28; }
+.chest-zone rect.plaps { stroke-dasharray: 6 4; }
+.chest-zone.s-normal rect { fill: var(--normal); stroke: var(--normal); }
+.chest-zone.s-abnormal rect { fill: var(--abnormal); stroke: var(--abnormal); fill-opacity: .4; }
+.chest-zone.s-partial rect { fill: var(--partial); stroke: var(--partial); }
+.chest-zone.s-empty rect { fill: var(--empty); stroke: var(--empty); fill-opacity: .15; }
+.chest-label { font: 700 14px -apple-system, sans-serif; fill: var(--text); pointer-events: none; }
+.chest-media { font: 600 9px -apple-system, sans-serif; fill: var(--accent); pointer-events: none; }
+.chest-zone:focus rect { stroke-width: 4; }
+.chest-caption { font-size: 12px; color: var(--muted); text-align: center; margin: 4px 0 0; }
+.chest-rib { fill: none; stroke: color-mix(in srgb, var(--text) 9%, transparent); stroke-width: 6; stroke-linecap: round; }
+.chest-badge { fill: var(--accent); stroke: var(--card); stroke-width: 2; }
+.chest-badge-icon { font: 700 9px -apple-system, sans-serif; fill: #fff; pointer-events: none; }

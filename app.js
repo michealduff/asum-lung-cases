@@ -805,7 +805,9 @@ function showView(c, isSupervisor) {
       onclick: () => $(`vz-${z}`).scrollIntoView({ behavior: 'smooth', block: 'start' }),
     }, z))));
   const findings = section('Findings by zone',
-    el('div', { class: 'zone-map' }, mapSide('Right', ['R1', 'R2', 'R3', 'R4', 'R-PLAPS']), mapSide('Left', ['L1', 'L2', 'L3', 'L4', 'L-PLAPS'])),
+    chestDiagram((z) => zoneStatus(z, zones[z] || {}), (z) => zoneMediaOf(c, z).length > 0,
+      (z) => $(`vz-${z}`).scrollIntoView({ behavior: 'smooth', block: 'start' })),
+    el('p', { class: 'chest-caption' }, 'Patient’s right on the left · 1–2 anterior, 3–4 lateral, PLAPS posterolateral base · tap a zone'),
     el('p', { class: 'legend' }, el('span', { class: 'dot normal' }), 'Normal ', el('span', { class: 'dot abnormal' }), 'Abnormal ', el('span', { class: 'dot empty' }), 'Not documented'),
     removedNote(c));
   ZONE_ORDER.forEach((z) => {
