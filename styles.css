@@ -281,3 +281,4 @@ button.small { min-height: 32px; padding: 4px 10px; font-size: 13px; }
 .chest-rib { fill: none; stroke: color-mix(in srgb, var(--text) 9%, transparent); stroke-width: 6; stroke-linecap: round; }
 .chest-badge { fill: var(--accent); stroke: var(--card); stroke-width: 2; }
 .chest-badge-icon { font: 700 9px -apple-system, sans-serif; fill: #fff; pointer-events: none; }
+#zoneMap.zone-map { display: block; }

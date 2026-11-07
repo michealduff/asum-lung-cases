@@ -556,17 +556,10 @@ function renderZoneCards() {
 }
 
 function renderZoneMap() {
-  const map = $('zoneMap');
-  map.innerHTML = '';
-  [['Right', ['R1', 'R2', 'R3', 'R4', 'R-PLAPS']], ['Left', ['L1', 'L2', 'L3', 'L4', 'L-PLAPS']]].forEach(([side, zones]) => {
-    map.append(el('div', { class: 'zone-side' },
-      el('h4', {}, side),
-      el('div', { class: 'zone-grid' }, zones.map((z) => el('button', {
-        type: 'button',
-        class: `zone-btn s-${zoneStatus(z, current.zones[z])}${z.includes('PLAPS') ? ' plaps' : ''}${zoneMediaOf(current, z).length ? ' has-media' : ''}`,
-        onclick: () => $(`zone-${z}`).scrollIntoView({ behavior: 'smooth', block: 'start' }),
-      }, z)))));
-  });
+  $('zoneMap').replaceChildren(
+    chestDiagram((z) => zoneStatus(z, current.zones[z] || {}), (z) => zoneMediaOf(current, z).length > 0,
+      (z) => $(`zone-${z}`).scrollIntoView({ behavior: 'smooth', block: 'start' })),
+    el('p', { class: 'chest-caption' }, 'Tap a zone to jump to it · ▶ = has a clip or photo'));
 }
 
 function renderPatternChips() {
