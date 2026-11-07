@@ -18,15 +18,17 @@ const ZONE_BOXES = {
 };
 
 function chestDiagram(statusOf, hasMedia, onPick) {
-  const svg = svgEl('svg', { viewBox: '0 0 360 330', class: 'chest', role: 'img', 'aria-label': 'Lung zones on a chest diagram' });
+  const svg = svgEl('svg', { viewBox: '-18 0 396 330', class: 'chest', role: 'img', 'aria-label': 'Lung zones on a chest diagram' });
   // Body outline (neck, shoulders, upper arms, torso), clavicles, sternum, faint ribs, costal margin
   svg.append(
-    svgEl('path', { class: 'chest-body', d: 'M158,4 L158,30 C130,38 96,40 66,50 C40,58 22,72 16,96 L10,190 L30,192 L36,118 L40,150 L48,292 Q180,318 312,292 L320,150 L324,118 L330,192 L350,190 L344,96 C338,72 320,58 294,50 C264,40 230,38 202,30 L202,4' }),
+    svgEl('path', { class: 'chest-body', d: 'M70,47 C34,52 12,72 7,106 L-8,222 Q6,236 26,226 L36,132 C39,118 40,104 40,94 C40,70 50,54 70,47 Z' }),
+    svgEl('path', { class: 'chest-body', d: 'M 290 47 C 326 52 348 72 353 106 L 368 222 Q 354 236 334 226 L 324 132 C 321 118 320 104 320 94 C 320 70 310 54 290 47 Z' }),
+    svgEl('path', { class: 'chest-body', d: 'M158,4 L158,30 C130,38 96,40 70,47 C50,54 40,70 40,94 L42,150 L50,292 Q180,318 310,292 L318,150 L320,94 C320,70 310,54 290,47 C264,40 230,38 202,30 L202,4' }),
     svgEl('path', { class: 'chest-line', d: 'M176,50 C150,47 110,52 78,62 M184,50 C210,47 250,52 282,62' }),
     svgEl('path', { class: 'chest-line faint', d: 'M180,52 L180,206 M108,214 Q180,264 252,214' }),
     svgEl('path', { class: 'chest-rib', d: 'M172,76 C140,70 96,78 60,98 M172,112 C140,106 96,114 58,134 M172,148 C140,142 98,150 60,170 M172,184 C142,178 102,186 66,204 M188,76 C220,70 264,78 300,98 M188,112 C220,106 264,114 302,134 M188,148 C220,142 262,150 300,170 M188,184 C218,178 258,186 294,204' }),
-    svgEl('text', { x: 14, y: 22, class: 'chest-side' }, 'R'),
-    svgEl('text', { x: 346, y: 22, class: 'chest-side', 'text-anchor': 'end' }, 'L'),
+    svgEl('text', { x: -10, y: 22, class: 'chest-side' }, 'R'),
+    svgEl('text', { x: 370, y: 22, class: 'chest-side', 'text-anchor': 'end' }, 'L'),
   );
   Object.entries(ZONE_BOXES).forEach(([z, [x, y, w, h]]) => {
     const st = statusOf(z);
