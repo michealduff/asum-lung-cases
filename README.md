@@ -33,3 +33,10 @@ Then open http://localhost:8123.
 ## Publishing changes
 
 Run `scripts/stamp-version.sh` before committing so phones pick up the new CSS/JS instead of cached copies, then push to `main`.
+
+## Keeping Supabase awake
+
+Supabase's free plan pauses a project after 7 days without activity. The GitHub Action
+`.github/workflows/keep-supabase-awake.yml` pings the database every 2 days to prevent that.
+If it ever fails (red ❌ in the repo's Actions tab, and GitHub emails you), restore the project
+in the Supabase dashboard.
